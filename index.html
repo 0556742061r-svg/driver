@@ -1,0 +1,921 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>מונה - יומן נסיעות</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="המונה שלי">
+<meta name="theme-color" content="#14161A">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2314161A'/%3E%3Ctext x='50' y='66' font-size='52' text-anchor='middle' fill='%23F4B400' font-family='Arial'%3E%E2%82%AA%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2314161A'/%3E%3Ctext x='50' y='66' font-size='52' text-anchor='middle' fill='%23F4B400' font-family='Arial'%3E%E2%82%AA%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#14161A;
+    --surface:#1F2226;
+    --surface2:#292D33;
+    --text:#F2F1ED;
+    --muted:#8B9099;
+    --accent:#F4B400;
+    --accent-dim:#4a3d10;
+    --paid:#3FB27F;
+    --paid-dim:#1c3327;
+    --unpaid:#E85D4A;
+    --unpaid-dim:#3a211c;
+    --divider:#31353b;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Heebo',sans-serif; overscroll-behavior-y:none;}
+  .mono{font-family:'Roboto Mono',monospace;}
+  #app{max-width:480px; margin:0 auto; min-height:100vh; padding-bottom:100px; position:relative;}
+
+  header{padding:22px 20px 8px; display:flex; align-items:baseline; justify-content:space-between;}
+  header h1{font-size:19px; font-weight:900; margin:0; letter-spacing:.5px;}
+  header .date{font-size:12px; color:var(--muted); font-family:'Roboto Mono',monospace;}
+
+  .meter{
+    margin:10px 18px 6px; background:linear-gradient(180deg,var(--surface2),var(--surface));
+    border-radius:18px; padding:20px 22px; position:relative; overflow:hidden;
+    border:1px solid #35393f; box-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 10px 24px -12px rgba(0,0,0,.6);
+  }
+  .meter::before{content:"";position:absolute; inset:0; background:
+    repeating-linear-gradient(90deg, rgba(244,180,0,.04) 0 2px, transparent 2px 14px);
+    pointer-events:none;}
+  .meter .label{font-size:11px; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; font-weight:500;}
+  .meter .amount{font-size:44px; font-weight:700; margin-top:4px; color:var(--accent); letter-spacing:1px; direction:ltr; text-align:right;}
+  .meter .amount span{font-size:22px; opacity:.7; margin-right:4px;}
+  .meter .sub{margin-top:10px; display:flex; gap:14px; font-size:12px; color:var(--muted);}
+  .meter .sub b{color:var(--text); font-family:'Roboto Mono',monospace;}
+
+  .outstanding{
+    margin:10px 18px; padding:13px 16px; border-radius:14px; background:var(--unpaid-dim);
+    border:1px solid #5a2f26; display:flex; align-items:center; justify-content:space-between;
+    font-size:13px; color:#f0b3a6;
+  }
+  .outstanding b{font-family:'Roboto Mono',monospace; font-size:17px; color:var(--unpaid); font-weight:700;}
+  .outstanding.hidden{display:none;}
+
+  .actions{display:flex; gap:8px; margin:16px 18px 8px; flex-wrap:wrap;}
+  .actbtn{
+    flex:1; min-width:96px; border:none; border-radius:16px; padding:16px 6px; font-family:'Heebo',sans-serif;
+    font-weight:700; font-size:13.5px; color:var(--bg); cursor:pointer; display:flex; flex-direction:column;
+    align-items:center; gap:5px; transition:transform .08s ease;
+  }
+  .actbtn:active{transform:scale(.96);}
+  .actbtn .ic{font-size:22px;}
+  .actbtn.passenger{background:var(--accent);}
+  .actbtn.delivery{background:#e6e6e6;}
+  .actbtn.install{background:#4FD1C5;}
+  .fuelbtn{
+    width:calc(100% - 36px); margin:0 18px; padding:12px; border-radius:14px; border:1px dashed #45494f;
+    background:transparent; color:var(--muted); font-family:'Heebo',sans-serif; font-weight:500;
+    font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .fuelbtn:active{background:var(--surface);}
+
+  .tabs{display:flex; gap:6px; margin:22px 18px 10px; background:var(--surface); padding:4px; border-radius:12px;}
+  .tab{flex:1; text-align:center; padding:9px 4px; border-radius:9px; font-size:12.5px; font-weight:500; color:var(--muted); cursor:pointer;}
+  .tab.active{background:var(--surface2); color:var(--text); font-weight:700;}
+
+  .listwrap{margin:4px 18px 0;}
+  .resetlink{
+    text-align:center; margin:22px 18px 4px; font-size:12px; color:var(--muted); padding:10px;
+    cursor:pointer; opacity:.7;
+  }
+  .resetlink:active{opacity:1; color:var(--unpaid);}
+
+  .fab{
+    position:fixed; bottom:26px; left:20px; width:60px; height:60px; border-radius:50%;
+    background:var(--unpaid); color:#fff; font-size:25px; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 10px 24px -8px rgba(0,0,0,.7); z-index:40;
+    touch-action:none; user-select:none; -webkit-touch-callout:none; -webkit-user-select:none;
+  }
+  .fab:active{transform:scale(.94);}
+  .fab.recording{animation:fabpulse 1s infinite;}
+  @keyframes fabpulse{
+    0%{ box-shadow:0 0 0 0 rgba(232,93,74,.65); }
+    70%{ box-shadow:0 0 0 20px rgba(232,93,74,0); }
+    100%{ box-shadow:0 0 0 0 rgba(232,93,74,0); }
+  }
+  .rectoast{
+    position:fixed; bottom:98px; left:14px; background:var(--surface2); color:var(--unpaid);
+    font-family:'Roboto Mono',monospace; font-weight:700; font-size:13px; padding:8px 16px;
+    border-radius:20px; display:none; align-items:center; z-index:41;
+    box-shadow:0 6px 16px -4px rgba(0,0,0,.6); border:1px solid #5a2f26;
+  }
+
+  .voicewrap{margin:14px 18px 0;}
+  .voiceheader{font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:600;}
+  .voicenote{
+    display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--surface); border-radius:14px;
+    margin-bottom:8px; border:1px solid #2f333a;
+  }
+  .voicenote audio{filter:invert(.88) hue-rotate(180deg);}
+  .voicemeta{text-align:center; min-width:56px; flex-shrink:0;}
+  .voicetag{font-size:10.5px; color:var(--text); font-weight:600; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .voicetime{font-size:10px; color:var(--muted); font-family:'Roboto Mono',monospace;}
+
+  .recbtn{
+    width:96px; height:96px; border-radius:50%; border:none; background:var(--unpaid); color:#fff; font-size:36px;
+    cursor:pointer; box-shadow:0 0 0 8px var(--unpaid-dim);
+  }
+  .recbtn.stop{background:var(--surface2); color:var(--unpaid); box-shadow:0 0 0 8px var(--surface2);}
+  .rectimer{font-size:32px; color:var(--unpaid); margin-bottom:22px; font-weight:700;}
+  .empty{text-align:center; padding:50px 20px; color:var(--muted); font-size:13px; line-height:1.8;}
+  .empty .ic{font-size:34px; display:block; margin-bottom:10px;}
+
+  .entry{
+    display:flex; align-items:center; gap:12px; padding:13px 14px; background:var(--surface);
+    border-radius:14px; margin-bottom:8px; border:1px solid #292d33;
+  }
+  .entry .ic{
+    width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-size:17px; flex-shrink:0; background:var(--surface2);
+  }
+  .entry .mid{flex:1; min-width:0;}
+  .entry .ttl{font-size:13.5px; font-weight:500;}
+  .entry .meta{font-size:11px; color:var(--muted); margin-top:2px; font-family:'Roboto Mono',monospace;}
+  .entry .amt{font-family:'Roboto Mono',monospace; font-weight:700; font-size:15px; direction:ltr;}
+  .entry .del{color:var(--muted); font-size:16px; padding:4px 6px; cursor:pointer;}
+  .badge{font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap; border:none; font-family:'Heebo',sans-serif;}
+  .badge.paid{background:var(--paid-dim); color:var(--paid);}
+  .badge.unpaid{background:var(--unpaid-dim); color:var(--unpaid);}
+
+  /* Modal */
+  .overlay{position:fixed; inset:0; background:rgba(10,11,13,.7); backdrop-filter:blur(2px); display:none; align-items:flex-end; z-index:50;}
+  .overlay.open{display:flex;}
+  .sheet{
+    width:100%; max-width:480px; margin:0 auto; background:var(--surface); border-radius:24px 24px 0 0;
+    padding:22px 20px 28px; animation:slideup .22s ease;
+  }
+  @keyframes slideup{from{transform:translateY(100%)} to{transform:translateY(0)}}
+  .sheet h2{margin:0 0 16px; font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .display{
+    background:var(--bg); border-radius:14px; padding:18px; text-align:center; margin-bottom:14px;
+    border:1px solid #2b2f35;
+  }
+  .display .val{font-family:'Roboto Mono',monospace; font-size:38px; font-weight:700; color:var(--accent); direction:ltr;}
+  .commlabel{font-size:12px; color:var(--muted); margin-bottom:8px;}
+  .commquick{display:flex; gap:8px; margin-bottom:16px;}
+  .qchip{
+    flex:1; padding:11px 4px; border-radius:12px; background:var(--surface2); text-align:center; font-size:12.5px;
+    color:var(--muted); cursor:pointer; border:1px solid transparent; font-weight:500;
+  }
+  .qchip.on{border-color:var(--accent); color:var(--accent); background:var(--accent-dim); font-weight:700;}
+  .comminput{
+    flex:1; min-width:0; padding:11px 6px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Roboto Mono',monospace; font-size:13px; text-align:center;
+  }
+  .comminput::placeholder{color:var(--muted);}
+  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px;}
+  .key{
+    padding:16px 0; border-radius:12px; background:var(--surface2); border:none; color:var(--text);
+    font-size:19px; font-weight:500; font-family:'Roboto Mono',monospace; cursor:pointer;
+  }
+  .key:active{background:#363b42;}
+  .key.fn{color:var(--muted); font-size:15px;}
+  .saverow{display:flex; gap:8px;}
+  .savebtn{
+    flex:1; padding:15px 4px; border:none; border-radius:14px; font-weight:700; font-size:12.5px; cursor:pointer;
+    color:#0c0d0f; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center;
+  }
+  .savebtn.paid{background:var(--paid);}
+  .savebtn.unpaid{background:var(--unpaid); color:#1c0d09;}
+  .savebtn.cancelbtn{background:var(--surface2); color:var(--muted); border:1px solid #45494f;}
+  .savebtn.single{background:var(--accent); flex:1;}
+  .alertbar{
+    margin:10px 18px; padding:13px 16px; border-radius:14px; display:flex; align-items:center; justify-content:space-between;
+    font-size:13px;
+  }
+  .alertbar.hidden{display:none;}
+  .alertbar.charge{background:#2f2a18; border:1px solid #5a4d26; color:#e8cf94;}
+  .alertbar.charge b{font-family:'Roboto Mono',monospace; font-size:16px; color:var(--accent); font-weight:700;}
+  .chargebadge{font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap; border:none; font-family:'Heebo',sans-serif;}
+  .chargebadge.pending{background:var(--surface2); color:var(--muted);}
+  .chargebadge.charged{background:var(--unpaid-dim); color:var(--unpaid);}
+  .chargebadge.cleared{background:var(--paid-dim); color:var(--paid);}
+  .cancelledtag{font-size:10px; font-weight:600; color:var(--muted); padding:4px 9px; border-radius:20px; background:var(--surface2);}
+
+  .taskswrap{margin:14px 18px 0;}
+  .task{
+    display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; margin-bottom:8px;
+    border:1px solid #35393f;
+  }
+  .task.ok{background:var(--surface);}
+  .task.soon{background:#332a14; border-color:#6b551f;}
+  .task.overdue{background:var(--unpaid-dim); border-color:#7a3a2c;}
+  .taskmid{flex:1; min-width:0;}
+  .taskttl{font-size:13.5px; font-weight:600;}
+  .tasktime{font-size:11px; color:var(--muted); margin-top:2px; font-family:'Roboto Mono',monospace;}
+  .task.soon .tasktime{color:#e8cf94;}
+  .task.overdue .tasktime{color:var(--unpaid); font-weight:700;}
+  .taskdone{
+    width:34px; height:34px; border-radius:10px; border:none; background:var(--paid); color:#0c0d0f;
+    font-weight:700; font-size:15px; cursor:pointer; flex-shrink:0;
+  }
+  .taskdel{color:var(--muted); font-size:15px; padding:4px 6px; cursor:pointer;}
+  .taskbtn{
+    width:calc(100% - 36px); margin:12px 18px 0; padding:12px; border-radius:14px; border:1px dashed var(--accent);
+    background:transparent; color:var(--accent); font-family:'Heebo',sans-serif; font-weight:600;
+    font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .taskbtn:active{background:var(--accent-dim);}
+  .taskinput{
+    width:100%; padding:14px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Heebo',sans-serif; font-size:14px; margin-bottom:10px; direction:rtl;
+  }
+  .taskinput[type=time]{direction:ltr; text-align:center; font-family:'Roboto Mono',monospace;}
+
+  .contacttoggle{
+    text-align:center; padding:10px; margin-bottom:12px; border-radius:12px; border:1px dashed #45494f;
+    color:var(--muted); font-size:12.5px; cursor:pointer; font-weight:500;
+  }
+  .contactfields{display:flex; gap:8px; margin-bottom:14px;}
+  .contactinput{
+    flex:1; padding:12px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Heebo',sans-serif; font-size:13px; direction:rtl;
+  }
+  .contactinput[type=tel]{direction:ltr; text-align:center; font-family:'Roboto Mono',monospace;}
+  .entrycontact{display:flex; align-items:center; gap:10px; margin-top:4px; font-size:11.5px; color:var(--muted);}
+  .entrycontact .cname{color:var(--text); font-weight:500;}
+  .entrycontact a{color:var(--accent); text-decoration:none; font-family:'Roboto Mono',monospace; direction:ltr; display:inline-flex; align-items:center; gap:3px;}
+  .cancel{width:100%; text-align:center; margin-top:12px; color:var(--muted); font-size:13px; padding:8px; cursor:pointer;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="overlay" id="overlay">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<script>
+const STORAGE_KEY = 'entries_v1';
+const TASKS_KEY = 'tasks_v1';
+const VOICE_KEY = 'voicenotes_v1';
+let entries = [];
+let tasks = [];
+let voiceNotes = [];
+let period = 'today';
+let draft = null; // {kind:'passenger'|'delivery'|'install'|'fuel', digits:'', commissionPct:number}
+let editTargetId = null; // set when adding debtor info to an already-saved entry
+let lastCommissionPct = { passenger:0, delivery:12, install:0 };
+
+const CATS = {
+  passenger:{label:'נסיעה', ic:'🚕'},
+  delivery:{label:'משלוח', ic:'📦'},
+  install:{label:'התקנה', ic:'🔧'},
+  fuel:{label:'דלק', ic:'⛽'}
+};
+
+function fmt(n){
+  return '₪' + n.toLocaleString('he-IL', {minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits:2});
+}
+
+function netOf(e){
+  if(e.kind==='fuel') return -e.amount;
+  if(e.status==='cancelled'){
+    if(e.commissionPct>0 && e.chargeStatus==='charged') return -(e.amount * (e.commissionPct/100));
+    return 0;
+  }
+  const gross = e.amount;
+  return gross * (1 - (e.commissionPct||0)/100);
+}
+
+function startOfPeriod(p){
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  if(p==='today') return d;
+  if(p==='week'){ const day = d.getDay(); d.setDate(d.getDate()-day); return d; }
+  if(p==='month'){ d.setDate(1); return d; }
+  return new Date(0);
+}
+
+function filtered(){
+  const start = startOfPeriod(period).getTime();
+  return entries.filter(e => e.ts >= start).sort((a,b)=>b.ts-a.ts);
+}
+
+const hasClaudeStorage = (typeof window.storage !== 'undefined' && window.storage);
+
+async function storageGet(key){
+  try{
+    if(hasClaudeStorage){
+      const r = await window.storage.get(key, false);
+      return r ? JSON.parse(r.value) : [];
+    } else {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    }
+  }catch(e){ return []; }
+}
+async function storageSet(key, value){
+  try{
+    if(hasClaudeStorage){
+      await window.storage.set(key, JSON.stringify(value), false);
+    } else {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  }catch(e){}
+}
+
+async function load(){
+  entries = await storageGet(STORAGE_KEY);
+  tasks = await storageGet(TASKS_KEY);
+  voiceNotes = await storageGet(VOICE_KEY);
+  render();
+}
+function save(){ storageSet(STORAGE_KEY, entries); }
+function saveTasks(){ storageSet(TASKS_KEY, tasks); }
+function saveVoiceNotes(){ storageSet(VOICE_KEY, voiceNotes); }
+
+function addEntry(e){
+  entries.push(e);
+  save();
+  render();
+}
+function togglePaid(id){
+  const e = entries.find(x=>x.id===id);
+  if(!e || e.status==='cancelled') return;
+  if(e.status==='paid'){
+    editTargetId = id;
+    document.getElementById('overlay').classList.add('open');
+    renderDebtorSheet();
+  } else {
+    e.status = 'paid';
+    save(); render();
+  }
+}
+function renderDebtorSheet(){
+  const e = entries.find(x=>x.id===editTargetId);
+  if(!e) return;
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>👤 למי מחכים לתשלום?</h2>
+    <div class="display"><div class="val mono">₪${e.amount}</div></div>
+    <input id="debtorName" class="contactinput" style="width:100%; margin-bottom:8px;" type="text" placeholder="שם הלקוח (לא חובה)" value="${e.name||''}">
+    <input id="debtorPhone" class="contactinput" style="width:100%; margin-bottom:14px;" type="tel" placeholder="טלפון (לא חובה)" value="${e.phone||''}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitDebtorEdit()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="submitDebtorEdit(true)">דלג בלי פרטים</div>
+  `;
+}
+function submitDebtorEdit(skip){
+  const e = entries.find(x=>x.id===editTargetId);
+  if(!e) return;
+  if(!skip){
+    e.name = (document.getElementById('debtorName').value || '').trim();
+    e.phone = (document.getElementById('debtorPhone').value || '').trim();
+  }
+  e.status = 'unpaid';
+  save();
+  closeSheet();
+  render();
+}
+function cycleCharge(id){
+  const e = entries.find(x=>x.id===id);
+  if(!e) return;
+  const order = ['pending','charged','cleared'];
+  const i = order.indexOf(e.chargeStatus);
+  e.chargeStatus = order[(i+1) % order.length];
+  save(); render();
+}
+
+function toggleTaskDone(id){
+  const t = tasks.find(x=>x.id===id);
+  if(t){ t.done = true; saveTasks(); render(); }
+}
+function removeTask(id){
+  tasks = tasks.filter(x=>x.id!==id);
+  saveTasks(); render();
+}
+function resetAllData(){
+  const ok = confirm('בטוח שברצונך למחוק את כל הנסיעות, המשלוחים וההתקנות שהזנת? הפעולה הזו לא ניתנת לביטול.');
+  if(!ok) return;
+  entries = [];
+  save();
+  render();
+}
+function openTaskModal(){
+  draft = null;
+  document.getElementById('overlay').classList.add('open');
+  renderTaskSheet();
+}
+function renderTaskSheet(){
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>🎯 הוספת יעד / תזכורת</h2>
+    <input id="taskTitle" class="taskinput" type="text" placeholder="לדוגמה: משלוח לבני ברק">
+    <input id="taskTime" class="taskinput" type="time" value="${hh}:${mm}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="commitTask()"><span>💾</span><span>שמירת תזכורת</span></button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function commitTask(){
+  const titleEl = document.getElementById('taskTitle');
+  const timeEl = document.getElementById('taskTime');
+  const title = titleEl.value.trim();
+  const timeVal = timeEl.value;
+  if(!title || !timeVal) return;
+  const [h,m] = timeVal.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  tasks.push({
+    id: 'task'+Date.now()+Math.random().toString(36).slice(2,7),
+    title, deadline: d.getTime(), done:false
+  });
+  saveTasks();
+  closeSheet();
+  render();
+}
+
+// ---- Voice memo recorder ----
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingTimerHandle = null;
+let recordingSeconds = 0;
+let previewBlob = null;
+
+// Press-and-hold quick recording (primary flow): hold the FAB to record, release to auto-save.
+let fabRecording = false;
+let fabStartTime = 0;
+
+function fabStart(e){
+  if(e && e.preventDefault) e.preventDefault();
+  if(fabRecording) return;
+  navigator.mediaDevices.getUserMedia({ audio:true }).then(stream=>{
+    fabRecording = true;
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = ev=>{ if(ev.data && ev.data.size>0) recordedChunks.push(ev.data); };
+    mediaRecorder.onstop = ()=>{
+      stream.getTracks().forEach(t=>t.stop());
+      clearInterval(recordingTimerHandle);
+      const toast = document.getElementById('recToast');
+      const fabEl = document.getElementById('fabRec');
+      if(toast) toast.style.display = 'none';
+      if(fabEl) fabEl.classList.remove('recording');
+      const elapsed = Math.max(1, Math.round((Date.now() - fabStartTime) / 1000));
+      fabRecording = false;
+      if(elapsed < 1 || recordedChunks.length === 0) return; // too short / accidental touch — discard silently
+      const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      const reader = new FileReader();
+      reader.onload = function(){
+        voiceNotes.push({
+          id: 'v'+Date.now()+Math.random().toString(36).slice(2,7),
+          ts: Date.now(),
+          durationSec: elapsed,
+          tag: '',
+          mime: blob.type,
+          base64: reader.result,
+          reviewed:false
+        });
+        saveVoiceNotes();
+        render();
+      };
+      reader.readAsDataURL(blob);
+    };
+    mediaRecorder.start();
+    fabStartTime = Date.now();
+    const fabEl = document.getElementById('fabRec');
+    const toast = document.getElementById('recToast');
+    if(fabEl) fabEl.classList.add('recording');
+    if(toast){ toast.style.display = 'flex'; toast.textContent = '🔴 00:00'; }
+    recordingTimerHandle = setInterval(()=>{
+      const sec = Math.round((Date.now() - fabStartTime) / 1000);
+      if(toast) toast.textContent = '🔴 ' + durFmt(sec);
+    }, 300);
+  }).catch(()=>{
+    alert('לא הצלחתי לגשת למיקרופון. ייתכן שהקובץ נפתח ישירות מההורדות (לא דרך אתר מאובטח), או שהרשאת המיקרופון לא אושרה.');
+  });
+}
+function fabStop(){
+  if(!fabRecording) return;
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    mediaRecorder.stop();
+  }
+}
+
+function openRecorder(){
+  draft = null;
+  editTargetId = null;
+  recordingSeconds = 0;
+  previewBlob = null;
+  recordedChunks = [];
+  document.getElementById('overlay').classList.add('open');
+  renderRecorderSheet('idle');
+}
+
+function renderRecorderSheet(state){
+  const sheet = document.getElementById('sheet');
+  if(state==='idle'){
+    sheet.innerHTML = `
+      <h2>🎙️ הקלטת הודעה קולית</h2>
+      <div style="text-align:center; padding:26px 0 10px;">
+        <button class="recbtn" onclick="startRecording()">🎙️</button>
+        <div style="margin-top:16px; color:var(--muted); font-size:13px;">לחץ כדי להתחיל להקליט</div>
+      </div>
+      <div class="cancel" onclick="closeSheet()">ביטול</div>
+    `;
+  } else if(state==='recording'){
+    sheet.innerHTML = `
+      <h2>🔴 מקליט...</h2>
+      <div style="text-align:center; padding:20px 0 10px;">
+        <div class="rectimer mono" id="recTimer">00:00</div>
+        <button class="recbtn stop" onclick="stopRecording()">⏹️</button>
+        <div style="margin-top:16px; color:var(--muted); font-size:13px;">לחץ כדי לעצור ולשמור</div>
+      </div>
+    `;
+  } else if(state==='preview'){
+    const url = URL.createObjectURL(previewBlob);
+    sheet.innerHTML = `
+      <h2>✅ ההקלטה מוכנה (${durFmt(recordingSeconds)})</h2>
+      <audio controls src="${url}" style="width:100%; margin-bottom:16px; filter:invert(.88) hue-rotate(180deg);"></audio>
+      <input id="noteTag" class="contactinput" style="width:100%; margin-bottom:14px;" type="text" placeholder="תיוג קצר (לא חובה, למשל: לקוח X)">
+      <div class="saverow">
+        <button class="savebtn paid" onclick="saveVoiceNote()">💾 שמירה</button>
+        <button class="savebtn cancelbtn" onclick="openRecorder()">🔁 מחדש</button>
+      </div>
+      <div class="cancel" onclick="closeSheet()">מחיקה וביטול</div>
+    `;
+  } else if(state==='error'){
+    sheet.innerHTML = `
+      <h2>⚠️ לא ניתן להקליט</h2>
+      <div style="color:var(--muted); font-size:13px; line-height:1.8; padding:6px 0 22px;">
+        לא הצלחתי לקבל גישה למיקרופון. זה קורה בדרך כלל כשהקובץ נפתח ישירות מההורדות ולא דרך אתר מאובטח, או שהרשאת המיקרופון לא אושרה לדפדפן.
+      </div>
+      <div class="cancel" onclick="closeSheet()">סגירה</div>
+    `;
+  }
+}
+
+async function startRecording(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = ()=>{
+      previewBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      stream.getTracks().forEach(t=>t.stop());
+      clearInterval(recordingTimerHandle);
+      renderRecorderSheet('preview');
+    };
+    mediaRecorder.start();
+    recordingSeconds = 0;
+    renderRecorderSheet('recording');
+    recordingTimerHandle = setInterval(()=>{
+      recordingSeconds++;
+      const el = document.getElementById('recTimer');
+      if(el) el.textContent = durFmt(recordingSeconds);
+    }, 1000);
+  }catch(err){
+    renderRecorderSheet('error');
+  }
+}
+function stopRecording(){
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    mediaRecorder.stop();
+  }
+}
+function saveVoiceNote(){
+  if(!previewBlob) return;
+  const tagEl = document.getElementById('noteTag');
+  const tag = tagEl ? tagEl.value.trim() : '';
+  const reader = new FileReader();
+  reader.onload = function(){
+    voiceNotes.push({
+      id: 'v'+Date.now()+Math.random().toString(36).slice(2,7),
+      ts: Date.now(),
+      durationSec: recordingSeconds,
+      tag,
+      mime: previewBlob.type,
+      base64: reader.result,
+      reviewed:false
+    });
+    saveVoiceNotes();
+    previewBlob = null;
+    closeSheet();
+    render();
+  };
+  reader.readAsDataURL(previewBlob);
+}
+
+function removeEntry(id){
+  entries = entries.filter(x=>x.id!==id);
+  save();
+  render();
+}
+
+function badgeFor(e){
+  if(e.kind==='fuel') return '';
+  if(e.status==='cancelled'){
+    if(!e.commissionPct) return `<span class="cancelledtag">בוטלה</span>`;
+    const labels = {pending:'לבדוק חיוב', charged:'חויבתי 12%', cleared:'בוטל בהצלחה'};
+    return `<button class="chargebadge ${e.chargeStatus}" onclick="cycleCharge('${e.id}')">${labels[e.chargeStatus]}</button>`;
+  }
+  return `<button class="badge ${e.status==='paid'?'paid':'unpaid'}" onclick="togglePaid('${e.id}')">${e.status==='paid'?'שולם':'טרם שולם'}</button>`;
+}
+
+function timeLabel(ts){
+  const d = new Date(ts);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dOnly = new Date(d); dOnly.setHours(0,0,0,0);
+  const diffDays = Math.round((today - dOnly)/86400000);
+  const hh = d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+  if(diffDays===0) return hh;
+  if(diffDays===1) return 'אתמול · ' + hh;
+  return d.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'}) + ' · ' + hh;
+}
+
+function renderTasksSection(){
+  const open = tasks.filter(t=>!t.done).sort((a,b)=>a.deadline-b.deadline);
+  if(open.length===0) return '';
+  const now = Date.now();
+  return `<div class="taskswrap">${open.map(t=>{
+    const minsLeft = Math.round((t.deadline - now)/60000);
+    let cls = 'ok';
+    if(minsLeft<=0) cls='overdue';
+    else if(minsLeft<=30) cls='soon';
+    const timeStr = new Date(t.deadline).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+    const label = minsLeft<=0 ? `באיחור של ${Math.abs(minsLeft)} דק'` : (minsLeft<60 ? `עוד ${minsLeft} דק'` : `יעד ${timeStr}`);
+    return `
+      <div class="task ${cls}">
+        <div class="taskmid">
+          <div class="taskttl">${t.title}</div>
+          <div class="tasktime">${label} · ${timeStr}</div>
+        </div>
+        <button class="taskdone" onclick="toggleTaskDone('${t.id}')">✓</button>
+        <div class="taskdel" onclick="removeTask('${t.id}')">✕</div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function durFmt(s){
+  const mm = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return mm+':'+ss;
+}
+
+function renderVoiceSection(){
+  const open = voiceNotes.filter(v=>!v.reviewed).sort((a,b)=>b.ts-a.ts);
+  if(open.length===0) return '';
+  return `<div class="voicewrap">
+    <div class="voiceheader">🎙️ הודעות קוליות שממתינות (${open.length})</div>
+    ${open.map(v=>`
+      <div class="voicenote">
+        <audio controls preload="none" src="${v.base64}" style="flex:1; height:34px; min-width:0;"></audio>
+        <div class="voicemeta">
+          <div class="voicetag">${v.tag ? v.tag : timeLabel(v.ts)}</div>
+          <div class="voicetime">${durFmt(v.durationSec)}</div>
+        </div>
+        <button class="taskdone" onclick="markVoiceReviewed('${v.id}')">✓</button>
+        <div class="taskdel" onclick="removeVoiceNote('${v.id}')">✕</div>
+      </div>`).join('')}
+  </div>`;
+}
+function markVoiceReviewed(id){
+  const v = voiceNotes.find(x=>x.id===id);
+  if(v){ v.reviewed = true; saveVoiceNotes(); render(); }
+}
+function removeVoiceNote(id){
+  voiceNotes = voiceNotes.filter(x=>x.id!==id);
+  saveVoiceNotes(); render();
+}
+
+function render(){
+  const list = filtered();
+  const netTotal = list.reduce((s,e)=> s + netOf(e), 0);
+  const outstanding = list.filter(e=>e.kind!=='fuel' && e.status==='unpaid')
+                           .reduce((s,e)=> s + netOf(e), 0);
+  const pendingCharges = list.filter(e=>e.status==='cancelled' && e.commissionPct>0 && e.chargeStatus==='pending');
+  const pendingChargeSum = pendingCharges.reduce((s,e)=> s + e.amount*0.12, 0);
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <header>
+      <h1>המונה שלי</h1>
+      <div class="date mono">${new Date().toLocaleDateString('he-IL',{weekday:'long', day:'numeric', month:'long'})}</div>
+    </header>
+
+    ${renderTasksSection()}
+    <button class="taskbtn" onclick="openTaskModal()"><span>🎯</span><span>הוספת יעד / תזכורת עם שעה</span></button>
+    ${renderVoiceSection()}
+
+    <div class="meter">
+      <div class="label">${period==='today'?'רווח נטו · היום':period==='week'?'רווח נטו · השבוע':period==='month'?'רווח נטו · החודש':'רווח נטו · הכל'}</div>
+      <div class="amount"><span>₪</span>${netTotal.toLocaleString('he-IL',{minimumFractionDigits:0, maximumFractionDigits:0})}</div>
+      <div class="sub">
+        <span>נסיעות: <b>${list.filter(e=>e.kind!=='fuel').length}</b></span>
+        <span>דלק: <b>${fmt(list.filter(e=>e.kind==='fuel').reduce((s,e)=>s+e.amount,0))}</b></span>
+      </div>
+    </div>
+
+    <div class="outstanding ${outstanding>0?'':'hidden'}">
+      <span>💸 מגיע לך מלקוחות שטרם שילמו</span>
+      <b>${fmt(outstanding)}</b>
+    </div>
+
+    <div class="alertbar charge ${pendingCharges.length>0?'':'hidden'}">
+      <span>⚠️ ${pendingCharges.length} נסיעות בוטלו - לא בטוח שהניכוי בוטל</span>
+      <b>עד ${fmt(pendingChargeSum)}</b>
+    </div>
+
+    <div class="actions">
+      <button class="actbtn passenger" onclick="openDraft('passenger')">
+        <span class="ic">🚕</span> נסיעה
+      </button>
+      <button class="actbtn delivery" onclick="openDraft('delivery')">
+        <span class="ic">📦</span> משלוח
+      </button>
+      <button class="actbtn install" onclick="openDraft('install')">
+        <span class="ic">🔧</span> התקנה
+      </button>
+    </div>
+    <button class="fuelbtn" onclick="openDraft('fuel')"><span>⛽</span><span>הוספת הוצאת דלק</span></button>
+
+    <div class="tabs">
+      ${['today','week','month','all'].map(p=>`
+        <div class="tab ${period===p?'active':''}" onclick="setPeriod('${p}')">
+          ${p==='today'?'היום':p==='week'?'השבוע':p==='month'?'החודש':'הכל'}
+        </div>`).join('')}
+    </div>
+
+    <div class="listwrap">
+      ${list.length===0 ? `
+        <div class="empty">
+          <span class="ic">🧾</span>
+          עדיין אין רשומות בטווח הזה.<br>תתחיל בלחיצה על נסיעה או משלוח למעלה.
+        </div>` : list.map(e=>`
+        <div class="entry">
+          <div class="ic">${CATS[e.kind].ic}</div>
+          <div class="mid">
+            <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.kind!=='fuel' && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
+            <div class="meta">${timeLabel(e.ts)}</div>
+            ${(e.name || e.phone) ? `
+              <div class="entrycontact">
+                ${e.name ? `<span class="cname">👤 ${e.name}</span>` : ''}
+                ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}">📞 ${e.phone}</a>` : ''}
+              </div>` : ''}
+          </div>
+          ${badgeFor(e)}
+          <div class="amt" style="color:${e.kind==='fuel'?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${e.kind==='fuel'?'-':''}${fmt(e.amount)}</div>
+          <div class="del" onclick="removeEntry('${e.id}')">✕</div>
+        </div>
+      `).join('')}
+    </div>
+
+    ${entries.length>0 ? `<div class="resetlink" onclick="resetAllData()">🗑️ איפוס כל הנתונים</div>` : ''}
+
+    <button class="fab" id="fabRec"
+      onpointerdown="fabStart(event)" onpointerup="fabStop(event)"
+      onpointerleave="fabStop(event)" onpointercancel="fabStop(event)"
+      oncontextmenu="return false">🎙️</button>
+    <div class="rectoast" id="recToast"></div>
+  `;
+}
+
+function setPeriod(p){ period = p; render(); }
+
+// ---- Draft / modal (quick add) ----
+function openDraft(kind){
+  draft = { kind, digits:'', commissionPct: (kind==='fuel'||kind==='install') ? 0 : (lastCommissionPct[kind] ?? 0), contactOpen:false, forcedContact:false, name:'', phone:'' };
+  renderSheet();
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSheet(){
+  document.getElementById('overlay').classList.remove('open');
+  draft = null;
+  editTargetId = null;
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    try{ mediaRecorder.stop(); }catch(e){}
+  }
+  clearInterval(recordingTimerHandle);
+  previewBlob = null;
+}
+function pressKey(k){
+  if(!draft) return;
+  if(k==='back'){ draft.digits = draft.digits.slice(0,-1); }
+  else if(k==='.'){ if(!draft.digits.includes('.')) draft.digits += (draft.digits===''?'0.':'.'); }
+  else { if(draft.digits.length < 7) draft.digits += k; }
+  renderSheet();
+}
+function toggleContact(){
+  if(!draft) return;
+  draft.contactOpen = !draft.contactOpen;
+  renderSheet();
+}
+function setCommission(pct){
+  if(!draft) return;
+  draft.commissionPct = pct;
+  renderSheet();
+}
+function setCustomCommission(val){
+  if(!draft) return;
+  draft.commissionPct = val === '' ? 0 : Math.max(0, Math.min(100, parseFloat(val)||0));
+  document.querySelectorAll('.qchip').forEach(el=>el.classList.remove('on'));
+}
+function commitDraft(status){
+  if(!draft) return;
+  const amount = parseFloat(draft.digits || '0');
+  if(!amount || amount<=0){ return; }
+
+  if(status==='unpaid' && draft.kind!=='fuel' && !draft.forcedContact){
+    draft.forcedContact = true;
+    draft.contactOpen = true;
+    renderSheet();
+    return;
+  }
+
+  if(draft.kind!=='fuel') lastCommissionPct[draft.kind] = draft.commissionPct;
+  addEntry({
+    id: 'e'+Date.now()+Math.random().toString(36).slice(2,7),
+    kind: draft.kind,
+    amount,
+    commissionPct: draft.kind==='fuel' ? 0 : (draft.commissionPct||0),
+    status: draft.kind==='fuel' ? 'paid' : status,
+    chargeStatus: status==='cancelled' ? 'pending' : null,
+    name: draft.kind==='fuel' ? '' : (draft.name || '').trim(),
+    phone: draft.kind==='fuel' ? '' : (draft.phone || '').trim(),
+    ts: Date.now()
+  });
+  closeSheet();
+}
+
+function renderSheet(){
+  if(!draft) return;
+  const cat = CATS[draft.kind];
+  const amountVal = draft.digits || '0';
+  const sheet = document.getElementById('sheet');
+
+  if(draft.forcedContact){
+    sheet.innerHTML = `
+      <h2>👤 למי מחכים לתשלום?</h2>
+      <div class="display"><div class="val mono">₪${amountVal}</div></div>
+      <input class="contactinput" style="width:100%; margin-bottom:8px;" type="text" placeholder="שם הלקוח (לא חובה)" value="${draft.name||''}" oninput="draft.name=this.value">
+      <input class="contactinput" style="width:100%; margin-bottom:14px;" type="tel" placeholder="טלפון (לא חובה)" value="${draft.phone||''}" oninput="draft.phone=this.value">
+      <div class="saverow">
+        <button class="savebtn single" onclick="commitDraft('unpaid')">💾 שמירה</button>
+      </div>
+      <div class="cancel" onclick="draft.name='';draft.phone='';commitDraft('unpaid')">דלג בלי פרטים</div>
+    `;
+    return;
+  }
+
+  sheet.innerHTML = `
+    <h2>${cat.ic} הוספת ${cat.label}</h2>
+    <div class="display"><div class="val mono">₪${amountVal}</div></div>
+    ${draft.kind!=='fuel' ? `
+      ${draft.kind!=='install' ? `
+      <div class="commlabel">אחוז ניכוי מהנסיעה</div>
+      <div class="commquick">
+        <div class="qchip ${draft.commissionPct===0?'on':''}" onclick="setCommission(0)">אין ניכוי</div>
+        <div class="qchip ${draft.commissionPct===12?'on':''}" onclick="setCommission(12)">12%</div>
+        <input class="comminput" type="number" min="0" max="100" inputmode="decimal" placeholder="אחר %" value="${(draft.commissionPct!==0 && draft.commissionPct!==12) ? draft.commissionPct : ''}" oninput="setCustomCommission(this.value)">
+      </div>` : ''}
+      ${!draft.contactOpen ? `
+        <div class="contacttoggle" onclick="toggleContact()">➕ הוספת שם וטלפון של הלקוח (לגביה)</div>
+      ` : `
+        <div class="contactfields">
+          <input class="contactinput" type="text" placeholder="שם הלקוח" value="${draft.name||''}" oninput="draft.name=this.value">
+          <input class="contactinput" type="tel" placeholder="טלפון" value="${draft.phone||''}" oninput="draft.phone=this.value">
+        </div>
+      `}` : ''}
+    <div class="keypad">
+      ${['1','2','3','4','5','6','7','8','9','.','0','back'].map(k=>`
+        <button class="key ${k==='back'?'fn':''}" onclick="pressKey('${k}')">${k==='back'?'⌫':k}</button>
+      `).join('')}
+    </div>
+    ${draft.kind==='fuel' ? `
+      <div class="saverow">
+        <button class="savebtn single" onclick="commitDraft('paid')"><span>💾</span><span>שמירה</span></button>
+      </div>` : `
+      <div class="saverow">
+        <button class="savebtn paid" onclick="commitDraft('paid')">✓<br>שולם</button>
+        <button class="savebtn unpaid" onclick="commitDraft('unpaid')">⏳<br>טרם שולם</button>
+        <button class="savebtn cancelbtn" onclick="commitDraft('cancelled')">🚫<br>בוטלה</button>
+      </div>`}
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+
+load();
+setInterval(()=>{
+  const overlayOpen = document.getElementById('overlay').classList.contains('open');
+  const anyAudioPlaying = Array.from(document.querySelectorAll('audio')).some(a=>!a.paused);
+  if(!overlayOpen && !anyAudioPlaying && !fabRecording) render();
+}, 60000);
+</script>
+</body>
+</html>
