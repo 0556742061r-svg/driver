@@ -242,9 +242,25 @@
   }
   .contactinput[type=tel]{direction:ltr; text-align:center; font-family:'Roboto Mono',monospace;}
   .entrycontact{display:flex; align-items:center; gap:10px; margin-top:4px; font-size:11.5px; color:var(--muted);}
+  .deadlinerow{display:flex; gap:10px; margin-bottom:6px; align-items:stretch;}
+  .timepicker{
+    flex:1; padding:16px 14px; border-radius:14px; background:var(--surface2); border:1.5px solid var(--accent);
+    color:var(--accent); font-family:'Roboto Mono',monospace; font-size:24px; font-weight:700; direction:ltr;
+    text-align:center; letter-spacing:1px;
+  }
+  .timepicker::-webkit-calendar-picker-indicator{filter:invert(.8) sepia(1) saturate(4) hue-rotate(5deg); opacity:.85; transform:scale(1.3); cursor:pointer;}
+  .timeresetbtn{
+    flex:0 0 56px; border-radius:14px; background:var(--surface2); border:1px solid #3a3e44; color:var(--muted);
+    font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .timeresetbtn:active{background:#363b42; color:var(--text);}
   .entrycontact .cname{color:var(--text); font-weight:500;}
   .entrycontact a{color:var(--accent); text-decoration:none; font-family:'Roboto Mono',monospace; direction:ltr; display:inline-flex; align-items:center; gap:3px;}
-  .cancel{width:100%; text-align:center; margin-top:12px; color:var(--muted); font-size:13px; padding:8px; cursor:pointer;}
+  .cancel{
+    width:100%; text-align:center; margin-top:14px; color:var(--muted); font-size:15px; font-weight:600;
+    padding:14px; cursor:pointer; border-radius:12px; background:var(--surface2);
+  }
+  .cancel:active{background:#363b42; color:var(--text);}
 </style>
 </head>
 <body>
@@ -761,7 +777,7 @@ function render(){
         <div class="entry">
           <div class="ic">${CATS[e.kind].ic}</div>
           <div class="mid">
-            <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.kind!=='fuel' && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
+            <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.urgency==='special' ? ' · ⚡ ספיישל' : ''}${e.urgency==='relaxed' ? ' · 🕊️ נחת' : ''}${e.kind!=='fuel' && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
             <div class="meta">${timeLabel(e.ts)}</div>
             ${(e.name || e.phone) ? `
               <div class="entrycontact">
@@ -790,7 +806,7 @@ function setPeriod(p){ period = p; render(); }
 
 // ---- Draft / modal (quick add) ----
 function openDraft(kind){
-  draft = { kind, digits:'', commissionPct: (kind==='fuel'||kind==='install') ? 0 : (lastCommissionPct[kind] ?? 0), contactOpen:false, forcedContact:false, name:'', phone:'' };
+  draft = { kind, digits:'', commissionPct: (kind==='fuel'||kind==='install') ? 0 : (lastCommissionPct[kind] ?? 0), contactOpen:false, forcedContact:false, name:'', phone:'', urgency:null, deadlineTime:'' };
   renderSheet();
   document.getElementById('overlay').classList.add('open');
 }
@@ -814,6 +830,17 @@ function pressKey(k){
 function toggleContact(){
   if(!draft) return;
   draft.contactOpen = !draft.contactOpen;
+  renderSheet();
+}
+function setUrgency(val){
+  if(!draft) return;
+  draft.urgency = (draft.urgency===val) ? null : val;
+  if(draft.urgency==='relaxed' && !draft.deadlineTime){
+    const now = new Date();
+    now.setMinutes(now.getMinutes()+30);
+    draft.deadlineTime = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  }
+  if(draft.urgency!=='relaxed') draft.deadlineTime = '';
   renderSheet();
 }
 function setCommission(pct){
@@ -848,8 +875,24 @@ function commitDraft(status){
     chargeStatus: status==='cancelled' ? 'pending' : null,
     name: draft.kind==='fuel' ? '' : (draft.name || '').trim(),
     phone: draft.kind==='fuel' ? '' : (draft.phone || '').trim(),
+    urgency: draft.kind==='fuel' ? null : draft.urgency,
     ts: Date.now()
   });
+
+  if(draft.kind!=='fuel' && draft.urgency==='relaxed' && draft.deadlineTime){
+    const [h,m] = draft.deadlineTime.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    const nameTag = (draft.name || '').trim();
+    tasks.push({
+      id: 'task'+Date.now()+Math.random().toString(36).slice(2,7),
+      title: `${CATS[draft.kind].label}${nameTag ? ' - '+nameTag : ''} · ₪${amount}`,
+      deadline: d.getTime(),
+      done:false
+    });
+    saveTasks();
+  }
+
   closeSheet();
 }
 
@@ -891,7 +934,19 @@ function renderSheet(){
           <input class="contactinput" type="text" placeholder="שם הלקוח" value="${draft.name||''}" oninput="draft.name=this.value">
           <input class="contactinput" type="tel" placeholder="טלפון" value="${draft.phone||''}" oninput="draft.phone=this.value">
         </div>
-      `}` : ''}
+      `}
+      <div class="commlabel" style="margin-top:14px;">סוג המשלוח / נסיעה</div>
+      <div class="commquick">
+        <div class="qchip ${draft.urgency==='special'?'on':''}" onclick="setUrgency('special')">⚡ ספיישל (מיידי)</div>
+        <div class="qchip ${draft.urgency==='relaxed'?'on':''}" onclick="setUrgency('relaxed')">🕊️ נחת (רגוע)</div>
+      </div>
+      ${draft.urgency==='relaxed' ? `
+        <div class="deadlinerow">
+          <input class="timepicker" type="time" value="${draft.deadlineTime||''}" oninput="draft.deadlineTime=this.value">
+          <button class="timeresetbtn" onclick="const n=new Date(); n.setMinutes(n.getMinutes()+30); draft.deadlineTime=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); renderSheet();">🔄</button>
+        </div>
+        <div style="font-size:11px; color:var(--muted); margin:0 0 12px;">עד איזו שעה צריך למסור (לא חובה)</div>
+      ` : ''}` : ''}
     <div class="keypad">
       ${['1','2','3','4','5','6','7','8','9','.','0','back'].map(k=>`
         <button class="key ${k==='back'?'fn':''}" onclick="pressKey('${k}')">${k==='back'?'⌫':k}</button>
