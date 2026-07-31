@@ -151,7 +151,11 @@
   }
   .entry .mid{flex:1; min-width:0;}
   .entry .ttl{font-size:13.5px; font-weight:500;}
-  .entry .meta{font-size:11px; color:var(--muted); margin-top:2px; font-family:'Roboto Mono',monospace;}
+  .entry .meta{
+    font-size:11px; color:var(--muted); margin-top:3px; font-family:'Roboto Mono',monospace;
+    display:flex; align-items:center; flex-wrap:wrap; row-gap:2px;
+  }
+  .entry .meta a{color:var(--accent); text-decoration:none; direction:ltr; unicode-bidi:isolate;}
   .entry .amt{font-family:'Roboto Mono',monospace; font-weight:700; font-size:15px; direction:ltr;}
   .entry .del{color:var(--muted); font-size:16px; padding:4px 6px; cursor:pointer;}
   .badge{font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap; border:none; font-family:'Heebo',sans-serif;}
@@ -267,8 +271,7 @@
   }
   .timeresetbtn:active{background:#363b42; color:var(--text);}
   .entrycontact .cname{color:var(--text); font-weight:500;}
-  .entrycontact a{color:var(--accent); text-decoration:none; font-family:'Roboto Mono',monospace; direction:ltr; display:inline-flex; align-items:center; gap:3px;}
-  .editdebtor{color:var(--muted); cursor:pointer; padding:2px 6px;}
+  .editdebtor{color:var(--muted); cursor:pointer; padding:3px 8px; margin-right:2px;}
   .editdebtor:active{color:var(--accent);}
   .cancel{
     width:100%; text-align:center; margin-top:14px; color:var(--muted); font-size:15px; font-weight:600;
@@ -922,16 +925,12 @@ function render(){
           <div class="ic">${CATS[e.kind].ic}</div>
           <div class="mid">
             <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.urgency==='special' ? ' · ⚡ ספיישל' : ''}${e.urgency==='relaxed' ? ' · 🕊️ נחת' : ''}${e.kind!=='fuel' && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
-            <div class="meta">${timeLabel(e.ts)}</div>
-            ${(e.name || e.phone) ? `
-              <div class="entrycontact">
-                ${e.name ? `<span class="cname">👤 ${e.name}</span>` : ''}
-                ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}">📞 ${e.phone}</a>` : ''}
-                ${e.kind!=='fuel' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
-              </div>` : (e.kind!=='fuel' ? `
-              <div class="entrycontact">
-                <span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️ הוספת פרטי לקוח</span>
-              </div>` : '')}
+            <div class="meta">
+              <span>${timeLabel(e.ts)}</span>
+              ${e.name ? `<span> · 👤 ${e.name}</span>` : ''}
+              ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}"> · 📞 ${e.phone}</a>` : ''}
+              ${e.kind!=='fuel' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
+            </div>
           </div>
           ${badgeFor(e)}
           <div class="amt" style="color:${e.kind==='fuel'?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${e.kind==='fuel'?'-':''}${fmt(e.amount)}</div>
