@@ -453,11 +453,14 @@ function addEntry(e){
   save();
   render();
 }
+let editTargetMode = 'statusChange'; // 'statusChange' (paid->unpaid via badge) or 'infoOnly' (pencil edit, any status)
+
 function togglePaid(id){
   const e = entries.find(x=>x.id===id);
   if(!e || e.status==='cancelled') return;
   if(e.status==='paid'){
     editTargetId = id;
+    editTargetMode = 'statusChange';
     document.getElementById('overlay').classList.add('open');
     renderDebtorSheet();
   } else {
@@ -467,6 +470,7 @@ function togglePaid(id){
 }
 function openDebtorEdit(id){
   editTargetId = id;
+  editTargetMode = 'infoOnly';
   document.getElementById('overlay').classList.add('open');
   renderDebtorSheet();
 }
@@ -475,7 +479,7 @@ function renderDebtorSheet(){
   if(!e) return;
   const sheet = document.getElementById('sheet');
   sheet.innerHTML = `
-    <h2>👤 למי מחכים לתשלום?</h2>
+    <h2>👤 ${editTargetMode==='infoOnly' ? 'עריכת פרטי לקוח' : 'למי מחכים לתשלום?'}</h2>
     <div class="display"><div class="val mono">₪${e.amount}</div></div>
     <div class="deadlinerow" style="margin-bottom:8px;">
       <input id="debtorName" class="contactinput" style="width:100%;" type="text" placeholder="שם הלקוח (לא חובה)" value="${e.name||''}">
@@ -487,7 +491,7 @@ function renderDebtorSheet(){
     <div class="saverow">
       <button class="savebtn single" onclick="submitDebtorEdit()">💾 שמירה</button>
     </div>
-    <div class="cancel" onclick="submitDebtorEdit(true)">דלג בלי פרטים</div>
+    <div class="cancel" onclick="submitDebtorEdit(true)">${editTargetMode==='infoOnly' ? 'ביטול' : 'דלג בלי פרטים'}</div>
   `;
 }
 function submitDebtorEdit(skip){
@@ -497,7 +501,7 @@ function submitDebtorEdit(skip){
     e.name = (document.getElementById('debtorName').value || '').trim();
     e.phone = (document.getElementById('debtorPhone').value || '').trim();
   }
-  if(e.status !== 'cancelled') e.status = 'unpaid';
+  if(editTargetMode==='statusChange' && e.status !== 'cancelled') e.status = 'unpaid';
   save();
   closeSheet();
   render();
@@ -923,10 +927,10 @@ function render(){
               <div class="entrycontact">
                 ${e.name ? `<span class="cname">👤 ${e.name}</span>` : ''}
                 ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}">📞 ${e.phone}</a>` : ''}
-                ${e.status==='unpaid' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
-              </div>` : (e.status==='unpaid' ? `
+                ${e.kind!=='fuel' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
+              </div>` : (e.kind!=='fuel' ? `
               <div class="entrycontact">
-                <span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️ הוספת פרטי חייב</span>
+                <span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️ הוספת פרטי לקוח</span>
               </div>` : '')}
           </div>
           ${badgeFor(e)}
