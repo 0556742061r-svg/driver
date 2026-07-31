@@ -52,6 +52,18 @@
   .meter .sub{margin-top:10px; display:flex; gap:14px; font-size:12px; color:var(--muted);}
   .meter .sub b{color:var(--text); font-family:'Roboto Mono',monospace;}
 
+  .workdaybar{
+    margin:10px 18px 0; padding:10px 14px; border-radius:12px; background:var(--surface);
+    border:1px solid #2f333a; display:flex; align-items:center; justify-content:space-between;
+    font-size:11.5px; color:var(--muted); flex-wrap:wrap; gap:8px;
+  }
+  .workdaybar.viewing{background:#26241a; border-color:#5a5026; color:#e8d894;}
+  .wdbtn{
+    border:none; background:var(--surface2); color:var(--text); font-size:11px; font-weight:600;
+    padding:7px 10px; border-radius:9px; cursor:pointer; font-family:'Heebo',sans-serif;
+  }
+  .wdbtn.end{background:var(--unpaid-dim); color:var(--unpaid);}
+  .wdbtn:active{opacity:.8;}
   .outstanding{
     margin:10px 18px; padding:13px 16px; border-radius:14px; background:var(--unpaid-dim);
     border:1px solid #5a2f26; display:flex; align-items:center; justify-content:space-between;
@@ -256,6 +268,8 @@
   .timeresetbtn:active{background:#363b42; color:var(--text);}
   .entrycontact .cname{color:var(--text); font-weight:500;}
   .entrycontact a{color:var(--accent); text-decoration:none; font-family:'Roboto Mono',monospace; direction:ltr; display:inline-flex; align-items:center; gap:3px;}
+  .editdebtor{color:var(--muted); cursor:pointer; padding:2px 6px;}
+  .editdebtor:active{color:var(--accent);}
   .cancel{
     width:100%; text-align:center; margin-top:14px; color:var(--muted); font-size:15px; font-weight:600;
     padding:14px; cursor:pointer; border-radius:12px; background:var(--surface2);
@@ -274,9 +288,14 @@
 const STORAGE_KEY = 'entries_v1';
 const TASKS_KEY = 'tasks_v1';
 const VOICE_KEY = 'voicenotes_v1';
+const WORKDAY_KEY = 'workday_v1';
+const WORKDAY_HISTORY_KEY = 'workdayhistory_v1';
 let entries = [];
 let tasks = [];
 let voiceNotes = [];
+let workdayStart = null;
+let workdayHistory = [];
+let viewingWorkdayId = null;
 let period = 'today';
 let draft = null; // {kind:'passenger'|'delivery'|'install'|'fuel', digits:'', commissionPct:number}
 let editTargetId = null; // set when adding debtor info to an already-saved entry
@@ -306,15 +325,84 @@ function netOf(e){
 function startOfPeriod(p){
   const d = new Date();
   d.setHours(0,0,0,0);
-  if(p==='today') return d;
   if(p==='week'){ const day = d.getDay(); d.setDate(d.getDate()-day); return d; }
   if(p==='month'){ d.setDate(1); return d; }
   return new Date(0);
 }
 
 function filtered(){
+  if(period==='today'){
+    let start, end;
+    if(viewingWorkdayId){
+      const wd = workdayHistory.find(w=>w.id===viewingWorkdayId);
+      start = wd ? wd.start : workdayStart;
+      end = wd ? wd.end : Infinity;
+    } else {
+      start = workdayStart;
+      end = Infinity;
+    }
+    return entries.filter(e => e.ts >= start && e.ts < end).sort((a,b)=>b.ts-a.ts);
+  }
   const start = startOfPeriod(period).getTime();
   return entries.filter(e => e.ts >= start).sort((a,b)=>b.ts-a.ts);
+}
+
+function currentTs(){
+  // If we're viewing (and adding to) a past workday, place new entries inside that day's range
+  if(viewingWorkdayId){
+    const wd = workdayHistory.find(w=>w.id===viewingWorkdayId);
+    if(wd){
+      const count = entries.filter(e=>e.ts>=wd.start && e.ts<wd.end).length;
+      let t = wd.start + count*1000;
+      if(t >= wd.end) t = wd.end - 1000;
+      return t;
+    }
+  }
+  return Date.now();
+}
+
+function endWorkday(){
+  const ok = confirm('לסיים את יום העבודה הנוכחי? כל מה שתזין מעכשיו ייספר כיום עבודה חדש.');
+  if(!ok) return;
+  const now = Date.now();
+  workdayHistory.push({ id:'wd'+now+Math.random().toString(36).slice(2,6), start: workdayStart, end: now });
+  saveWorkdayHistory();
+  workdayStart = now;
+  saveWorkdayStart();
+  viewingWorkdayId = null;
+  render();
+}
+function viewWorkday(id){
+  viewingWorkdayId = id;
+  period = 'today';
+  render();
+}
+function exitWorkdayView(){
+  viewingWorkdayId = null;
+  render();
+}
+function openWorkdayHistory(){
+  draft = null; editTargetId = null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  const sorted = [...workdayHistory].sort((a,b)=>b.start-a.start);
+  sheet.innerHTML = `
+    <h2>📅 ימי עבודה קודמים</h2>
+    ${sorted.length===0 ? `<div style="color:var(--muted); font-size:13px; padding:10px 0 20px;">עדיין לא סיימת אף יום עבודה. לוחצים "🌙 סיום יום עבודה" בעמוד הראשי כשמסיימים לנהוג.</div>` : sorted.map(wd=>{
+      const s = new Date(wd.start), e = new Date(wd.end);
+      const dateStr = s.toLocaleDateString('he-IL',{weekday:'short', day:'2-digit', month:'2-digit'});
+      const rangeStr = s.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}) + ' – ' + e.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+      const count = entries.filter(x=>x.ts>=wd.start && x.ts<wd.end).length;
+      return `
+        <div class="task ok" style="cursor:pointer;" onclick="viewWorkday('${wd.id}'); closeSheet();">
+          <div class="taskmid">
+            <div class="taskttl">${dateStr}</div>
+            <div class="tasktime">${rangeStr} · ${count} רשומות</div>
+          </div>
+        </div>`;
+    }).join('')}
+    <div class="cancel" onclick="closeSheet()">סגירה</div>
+  `;
 }
 
 const hasClaudeStorage = (typeof window.storage !== 'undefined' && window.storage);
@@ -344,11 +432,21 @@ async function load(){
   entries = await storageGet(STORAGE_KEY);
   tasks = await storageGet(TASKS_KEY);
   voiceNotes = await storageGet(VOICE_KEY);
+  const wsArr = await storageGet(WORKDAY_KEY);
+  workdayStart = (wsArr && wsArr.length) ? wsArr[0] : null;
+  if(workdayStart === null){
+    // First time seeing this feature: don't hide pre-existing entries from "today"
+    workdayStart = entries.length ? 0 : Date.now();
+    saveWorkdayStart();
+  }
+  workdayHistory = await storageGet(WORKDAY_HISTORY_KEY);
   render();
 }
 function save(){ storageSet(STORAGE_KEY, entries); }
 function saveTasks(){ storageSet(TASKS_KEY, tasks); }
 function saveVoiceNotes(){ storageSet(VOICE_KEY, voiceNotes); }
+function saveWorkdayStart(){ storageSet(WORKDAY_KEY, [workdayStart]); }
+function saveWorkdayHistory(){ storageSet(WORKDAY_HISTORY_KEY, workdayHistory); }
 
 function addEntry(e){
   entries.push(e);
@@ -367,6 +465,11 @@ function togglePaid(id){
     save(); render();
   }
 }
+function openDebtorEdit(id){
+  editTargetId = id;
+  document.getElementById('overlay').classList.add('open');
+  renderDebtorSheet();
+}
 function renderDebtorSheet(){
   const e = entries.find(x=>x.id===editTargetId);
   if(!e) return;
@@ -374,8 +477,13 @@ function renderDebtorSheet(){
   sheet.innerHTML = `
     <h2>👤 למי מחכים לתשלום?</h2>
     <div class="display"><div class="val mono">₪${e.amount}</div></div>
-    <input id="debtorName" class="contactinput" style="width:100%; margin-bottom:8px;" type="text" placeholder="שם הלקוח (לא חובה)" value="${e.name||''}">
-    <input id="debtorPhone" class="contactinput" style="width:100%; margin-bottom:14px;" type="tel" placeholder="טלפון (לא חובה)" value="${e.phone||''}">
+    <div class="deadlinerow" style="margin-bottom:8px;">
+      <input id="debtorName" class="contactinput" style="width:100%;" type="text" placeholder="שם הלקוח (לא חובה)" value="${e.name||''}">
+    </div>
+    <div class="deadlinerow" style="margin-bottom:8px;">
+      <input id="debtorPhone" class="contactinput" style="width:100%;" type="tel" placeholder="טלפון (לא חובה)" value="${e.phone||''}">
+    </div>
+    <div class="contacttoggle" onclick="pickContactInto('debtorName','debtorPhone')">📇 ייבוא מאנשי קשר</div>
     <div class="saverow">
       <button class="savebtn single" onclick="submitDebtorEdit()">💾 שמירה</button>
     </div>
@@ -389,10 +497,27 @@ function submitDebtorEdit(skip){
     e.name = (document.getElementById('debtorName').value || '').trim();
     e.phone = (document.getElementById('debtorPhone').value || '').trim();
   }
-  e.status = 'unpaid';
+  if(e.status !== 'cancelled') e.status = 'unpaid';
   save();
   closeSheet();
   render();
+}
+async function pickContactInto(nameFieldId, phoneFieldId){
+  if(!(navigator.contacts && navigator.contacts.select)){
+    alert('הדפדפן הזה לא תומך בייבוא אנשי קשר. אפשר להזין ידנית, או לוודא שאתה נכנס דרך כתובת https ולא קובץ מקומי.');
+    return;
+  }
+  try{
+    const picked = await navigator.contacts.select(['name','tel'], { multiple:false });
+    if(picked && picked.length){
+      const c = picked[0];
+      const nameEl = document.getElementById(nameFieldId);
+      const phoneEl = document.getElementById(phoneFieldId);
+      if(nameEl && c.name && c.name[0]) nameEl.value = c.name[0];
+      if(phoneEl && c.tel && c.tel[0]) phoneEl.value = c.tel[0];
+      if(draft){ draft.name = nameEl ? nameEl.value : draft.name; draft.phone = phoneEl ? phoneEl.value : draft.phone; }
+    }
+  }catch(err){ /* user cancelled the picker */ }
 }
 function cycleCharge(id){
   const e = entries.find(x=>x.id===id);
@@ -725,12 +850,27 @@ function render(){
       <div class="date mono">${new Date().toLocaleDateString('he-IL',{weekday:'long', day:'numeric', month:'long'})}</div>
     </header>
 
+    ${viewingWorkdayId ? (()=>{
+      const wd = workdayHistory.find(w=>w.id===viewingWorkdayId);
+      const rangeStr = wd ? (new Date(wd.start).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'}) + ' · ' + new Date(wd.start).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}) + '–' + new Date(wd.end).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})) : '';
+      return `<div class="workdaybar viewing">
+        <span>📅 צופה ביום: ${rangeStr}</span>
+        <button class="wdbtn" onclick="exitWorkdayView()">↩️ חזרה להיום</button>
+      </div>`;
+    })() : `<div class="workdaybar">
+      <span>יום עבודה החל ${new Date(workdayStart).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</span>
+      <div style="display:flex; gap:6px;">
+        <button class="wdbtn" onclick="openWorkdayHistory()">📅 ימים קודמים</button>
+        <button class="wdbtn end" onclick="endWorkday()">🌙 סיום יום</button>
+      </div>
+    </div>`}
+
     ${renderTasksSection()}
     <button class="taskbtn" onclick="openTaskModal()"><span>🎯</span><span>הוספת יעד / תזכורת עם שעה</span></button>
     ${renderVoiceSection()}
 
     <div class="meter">
-      <div class="label">${period==='today'?'רווח נטו · היום':period==='week'?'רווח נטו · השבוע':period==='month'?'רווח נטו · החודש':'רווח נטו · הכל'}</div>
+      <div class="label">${period!=='today' ? (period==='week'?'רווח נטו · השבוע':period==='month'?'רווח נטו · החודש':'רווח נטו · הכל') : (viewingWorkdayId ? 'רווח נטו · יום נבחר' : 'רווח נטו · יום עבודה נוכחי')}</div>
       <div class="amount"><span>₪</span>${netTotal.toLocaleString('he-IL',{minimumFractionDigits:0, maximumFractionDigits:0})}</div>
       <div class="sub">
         <span>נסיעות: <b>${list.filter(e=>e.kind!=='fuel').length}</b></span>
@@ -783,7 +923,11 @@ function render(){
               <div class="entrycontact">
                 ${e.name ? `<span class="cname">👤 ${e.name}</span>` : ''}
                 ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}">📞 ${e.phone}</a>` : ''}
-              </div>` : ''}
+                ${e.status==='unpaid' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
+              </div>` : (e.status==='unpaid' ? `
+              <div class="entrycontact">
+                <span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️ הוספת פרטי חייב</span>
+              </div>` : '')}
           </div>
           ${badgeFor(e)}
           <div class="amt" style="color:${e.kind==='fuel'?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${e.kind==='fuel'?'-':''}${fmt(e.amount)}</div>
@@ -802,7 +946,7 @@ function render(){
   `;
 }
 
-function setPeriod(p){ period = p; render(); }
+function setPeriod(p){ period = p; viewingWorkdayId = null; render(); }
 
 // ---- Draft / modal (quick add) ----
 function openDraft(kind){
@@ -876,7 +1020,7 @@ function commitDraft(status){
     name: draft.kind==='fuel' ? '' : (draft.name || '').trim(),
     phone: draft.kind==='fuel' ? '' : (draft.phone || '').trim(),
     urgency: draft.kind==='fuel' ? null : draft.urgency,
-    ts: Date.now()
+    ts: currentTs()
   });
 
   if(draft.kind!=='fuel' && draft.urgency==='relaxed' && draft.deadlineTime){
@@ -906,8 +1050,9 @@ function renderSheet(){
     sheet.innerHTML = `
       <h2>👤 למי מחכים לתשלום?</h2>
       <div class="display"><div class="val mono">₪${amountVal}</div></div>
-      <input class="contactinput" style="width:100%; margin-bottom:8px;" type="text" placeholder="שם הלקוח (לא חובה)" value="${draft.name||''}" oninput="draft.name=this.value">
-      <input class="contactinput" style="width:100%; margin-bottom:14px;" type="tel" placeholder="טלפון (לא חובה)" value="${draft.phone||''}" oninput="draft.phone=this.value">
+      <input id="draftName" class="contactinput" style="width:100%; margin-bottom:8px;" type="text" placeholder="שם הלקוח (לא חובה)" value="${draft.name||''}" oninput="draft.name=this.value">
+      <input id="draftPhone" class="contactinput" style="width:100%; margin-bottom:8px;" type="tel" placeholder="טלפון (לא חובה)" value="${draft.phone||''}" oninput="draft.phone=this.value">
+      <div class="contacttoggle" onclick="pickContactInto('draftName','draftPhone')">📇 ייבוא מאנשי קשר</div>
       <div class="saverow">
         <button class="savebtn single" onclick="commitDraft('unpaid')">💾 שמירה</button>
       </div>
@@ -931,9 +1076,10 @@ function renderSheet(){
         <div class="contacttoggle" onclick="toggleContact()">➕ הוספת שם וטלפון של הלקוח (לגביה)</div>
       ` : `
         <div class="contactfields">
-          <input class="contactinput" type="text" placeholder="שם הלקוח" value="${draft.name||''}" oninput="draft.name=this.value">
-          <input class="contactinput" type="tel" placeholder="טלפון" value="${draft.phone||''}" oninput="draft.phone=this.value">
+          <input id="draftName" class="contactinput" type="text" placeholder="שם הלקוח" value="${draft.name||''}" oninput="draft.name=this.value">
+          <input id="draftPhone" class="contactinput" type="tel" placeholder="טלפון" value="${draft.phone||''}" oninput="draft.phone=this.value">
         </div>
+        <div class="contacttoggle" onclick="pickContactInto('draftName','draftPhone')">📇 ייבוא מאנשי קשר</div>
       `}
       <div class="commlabel" style="margin-top:14px;">סוג המשלוח / נסיעה</div>
       <div class="commquick">
