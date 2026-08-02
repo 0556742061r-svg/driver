@@ -15,6 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
@@ -53,6 +54,32 @@
   .meter .amount{font-size:44px; font-weight:700; margin-top:4px; color:var(--accent); letter-spacing:1px; direction:ltr; text-align:right;}
   .meter .amount span{font-size:22px; opacity:.7; margin-right:4px;}
   .meter .sub{margin-top:10px; display:flex; gap:14px; font-size:12px; color:var(--muted);}
+
+  .goalcard{
+    margin:10px 18px 0; padding:16px 18px; background:var(--surface); border-radius:16px;
+    border:1px solid #2f333a;
+  }
+  .goalcard.nogoal{text-align:center; padding:14px 18px; color:var(--muted); font-size:13px; cursor:pointer;}
+  .goalcard.nogoal:active{background:var(--surface2);}
+  .goalhead{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;}
+  .goallabel{font-size:11.5px; color:var(--muted); letter-spacing:.5px;}
+  .goalnums{font-family:'Roboto Mono',monospace; font-size:13px; color:var(--text); cursor:pointer;}
+  .goalnums b{color:var(--accent); font-weight:700;}
+  .goalbar{
+    width:100%; height:14px; border-radius:10px; background:var(--surface2); overflow:hidden; position:relative;
+  }
+  .goalbarfill{
+    height:100%; border-radius:10px; background:linear-gradient(90deg, #d99a00, var(--accent));
+    transition:width .5s ease; min-width:0;
+  }
+  .goalbarfill.done{background:linear-gradient(90deg, var(--paid), #6fe3ab);}
+  .goalmsg{margin-top:10px; font-size:12.5px; color:var(--muted); text-align:center;}
+  .goalmsg.done{color:var(--paid); font-weight:600;}
+  .goalinput{
+    width:100%; padding:14px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--accent); font-family:'Roboto Mono',monospace; font-size:22px; font-weight:700; text-align:center;
+    direction:ltr; margin-bottom:14px;
+  }
   .meter .sub b{color:var(--text); font-family:'Roboto Mono',monospace;}
 
   .workdaybar{
@@ -145,7 +172,7 @@
   .empty .ic{font-size:34px; display:block; margin-bottom:10px;}
 
   .entry{
-    display:flex; align-items:center; gap:12px; padding:13px 14px; background:var(--surface);
+    display:flex; align-items:flex-start; gap:12px; padding:13px 14px; background:var(--surface);
     border-radius:14px; margin-bottom:8px; border:1px solid #292d33;
   }
   .entry .ic{
@@ -159,9 +186,22 @@
     display:flex; align-items:center; flex-wrap:wrap; row-gap:2px;
   }
   .entry .meta a{color:var(--accent); text-decoration:none; direction:ltr; unicode-bidi:isolate;}
-  .entry .amt{font-family:'Roboto Mono',monospace; font-weight:700; font-size:15px; direction:ltr;}
-  .entry .del{color:var(--muted); font-size:16px; padding:4px 6px; cursor:pointer;}
-  .badge{font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap; border:none; font-family:'Heebo',sans-serif;}
+  .contactline{
+    margin-top:7px; padding-top:6px; border-top:1px solid #292d33; display:flex; align-items:center;
+    flex-wrap:wrap; gap:10px; font-size:11px; color:var(--muted); font-family:'Roboto Mono',monospace;
+  }
+  .contactline a{color:var(--accent); text-decoration:none; direction:ltr; unicode-bidi:isolate;}
+  .entry .amt{
+    font-family:'Roboto Mono',monospace; font-weight:700; font-size:15px; direction:ltr;
+    min-width:56px; text-align:left; flex-shrink:0; padding-top:1px;
+  }
+  .entry .amt.editable{cursor:pointer; border-bottom:1px dotted #4a4e55; padding-bottom:2px;}
+  .entry .amt.editable:active{color:var(--accent) !important;}
+  .entry .del{color:var(--muted); font-size:16px; padding:4px 6px; cursor:pointer; flex-shrink:0;}
+  .badge{
+    font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap;
+    border:none; font-family:'Heebo',sans-serif; min-width:64px; text-align:center; flex-shrink:0;
+  }
   .badge.paid{background:var(--paid-dim); color:var(--paid);}
   .badge.unpaid{background:var(--unpaid-dim); color:var(--unpaid);}
 
@@ -214,11 +254,11 @@
   .alertbar.hidden{display:none;}
   .alertbar.charge{background:#2f2a18; border:1px solid #5a4d26; color:#e8cf94;}
   .alertbar.charge b{font-family:'Roboto Mono',monospace; font-size:16px; color:var(--accent); font-weight:700;}
-  .chargebadge{font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap; border:none; font-family:'Heebo',sans-serif;}
+  .chargebadge{font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap; border:none; font-family:'Heebo',sans-serif; min-width:64px; text-align:center; flex-shrink:0;}
   .chargebadge.pending{background:var(--surface2); color:var(--muted);}
   .chargebadge.charged{background:var(--unpaid-dim); color:var(--unpaid);}
   .chargebadge.cleared{background:var(--paid-dim); color:var(--paid);}
-  .cancelledtag{font-size:10px; font-weight:600; color:var(--muted); padding:4px 9px; border-radius:20px; background:var(--surface2);}
+  .cancelledtag{font-size:10px; font-weight:600; color:var(--muted); padding:4px 9px; border-radius:20px; background:var(--surface2); min-width:64px; text-align:center; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;}
 
   .taskswrap{margin:14px 18px 0;}
   .task{
@@ -333,12 +373,15 @@ const TASKS_KEY = 'tasks_v1';
 const VOICE_KEY = 'voicenotes_v1';
 const WORKDAY_KEY = 'workday_v1';
 const WORKDAY_HISTORY_KEY = 'workdayhistory_v1';
+const GOAL_KEY = 'dailygoal_v1';
 let entries = [];
 let tasks = [];
 let voiceNotes = [];
 let workdayStart = null;
 let workdayHistory = [];
 let viewingWorkdayId = null;
+let dailyGoal = null;
+let goalConfettiShownFor = null;
 let period = 'today';
 let draft = null; // {kind:'passenger'|'delivery'|'install'|'fuel', digits:'', commissionPct:number}
 let editTargetId = null; // set when adding debtor info to an already-saved entry
@@ -544,6 +587,12 @@ function attachFirestoreListeners(){
     workdayHistory = (d && d.value) ? JSON.parse(d.value) : [];
     render();
   }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(GOAL_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    const arr = (d && d.value) ? JSON.parse(d.value) : [];
+    dailyGoal = (arr && arr.length) ? arr[0] : null;
+    render();
+  }, err=>console.error(err)));
 }
 
 async function checkAndOfferLocalImport(){
@@ -580,6 +629,8 @@ async function load(){
     saveWorkdayStart();
   }
   workdayHistory = await storageGet(WORKDAY_HISTORY_KEY);
+  const goalArr = await storageGet(GOAL_KEY);
+  dailyGoal = (goalArr && goalArr.length) ? goalArr[0] : null;
   render();
 }
 function save(){ storageSet(STORAGE_KEY, entries); }
@@ -587,6 +638,7 @@ function saveTasks(){ storageSet(TASKS_KEY, tasks); }
 function saveVoiceNotes(){ storageSet(VOICE_KEY, voiceNotes); }
 function saveWorkdayStart(){ storageSet(WORKDAY_KEY, [workdayStart]); }
 function saveWorkdayHistory(){ storageSet(WORKDAY_HISTORY_KEY, workdayHistory); }
+function saveDailyGoal(){ storageSet(GOAL_KEY, dailyGoal===null ? [] : [dailyGoal]); }
 
 // ---- Auth screens & actions ----
 let authMode = 'login';
@@ -693,6 +745,31 @@ function togglePaid(id){
     e.status = 'paid';
     save(); render();
   }
+}
+function openAmountEdit(id){
+  editTargetId = id;
+  document.getElementById('overlay').classList.add('open');
+  const e = entries.find(x=>x.id===id);
+  if(!e) return;
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>${CATS[e.kind].ic} עריכת סכום</h2>
+    <input id="amountEditInput" class="goalinput" type="number" inputmode="decimal" value="${e.amount}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitAmountEdit()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitAmountEdit(){
+  const e = entries.find(x=>x.id===editTargetId);
+  if(!e) return;
+  const val = parseFloat(document.getElementById('amountEditInput').value || '0');
+  if(!val || val<=0) return;
+  e.amount = val;
+  save();
+  closeSheet();
+  render();
 }
 function openDebtorEdit(id){
   editTargetId = id;
@@ -1056,6 +1133,74 @@ function renderVoiceSection(){
       </div>`).join('')}
   </div>`;
 }
+
+function goalMessageFor(pct){
+  if(pct <= 0) return 'יום עבודה טוב מתחיל ככה 🙂';
+  if(pct < 25) return 'התחלה נעימה - כל נסיעה מקרבת אותך';
+  if(pct < 50) return 'רבע מהדרך מאחוריך, קצב נעים';
+  if(pct < 75) return 'כבר באמצע הדרך 💪';
+  if(pct < 100) return 'עוד קצת ואתה שם';
+  return '🎉 הגעת ליעד היומי שקבעת - כל מה שמעבר זה בונוס';
+}
+
+function renderGoalCard(netTotal){
+  if(dailyGoal === null || dailyGoal <= 0){
+    return `<div class="goalcard nogoal" onclick="openGoalEdit()">🎯 הגדר יעד יומי אישי (לא חובה)</div>`;
+  }
+  const pct = Math.round((netTotal / dailyGoal) * 100);
+  const barPct = Math.max(0, Math.min(100, pct));
+  const reached = netTotal >= dailyGoal;
+  const dayKey = viewingWorkdayId || workdayStart;
+
+  if(reached && goalConfettiShownFor !== dayKey && typeof confetti === 'function'){
+    goalConfettiShownFor = dayKey;
+    setTimeout(()=>{
+      try{ confetti({ particleCount:120, spread:80, origin:{ y:0.6 }, colors:['#F4B400','#3FB27F','#4FD1C5'] }); }catch(e){}
+    }, 150);
+  }
+
+  return `<div class="goalcard">
+    <div class="goalhead">
+      <div class="goallabel">יעד יומי</div>
+      <div class="goalnums" onclick="openGoalEdit()">₪${netTotal.toLocaleString('he-IL',{maximumFractionDigits:0})} <b>/ ₪${dailyGoal.toLocaleString('he-IL',{maximumFractionDigits:0})}</b> ✏️</div>
+    </div>
+    <div class="goalbar"><div class="goalbarfill ${reached?'done':''}" style="width:${barPct}%"></div></div>
+    <div class="goalmsg ${reached?'done':''}">${goalMessageFor(pct)}</div>
+  </div>`;
+}
+
+function openGoalEdit(){
+  draft = null; editTargetId = null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>🎯 יעד יומי אישי</h2>
+    <input id="goalAmount" class="goalinput" type="number" inputmode="numeric" placeholder="לדוגמה: 1000" value="${dailyGoal||''}">
+    <div style="font-size:12px; color:var(--muted); margin:-8px 0 16px; text-align:center;">
+      זה רק בשבילך - כלי אישי לראות התקדמות, לא תחרות עם אף אחד.
+    </div>
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitGoal()">💾 שמירה</button>
+    </div>
+    ${dailyGoal ? `<div class="cancel" onclick="clearGoal()">🗑️ ביטול היעד</div>` : `<div class="cancel" onclick="closeSheet()">ביטול</div>`}
+  `;
+}
+function submitGoal(){
+  const val = parseFloat(document.getElementById('goalAmount').value || '0');
+  if(!val || val<=0){ return; }
+  dailyGoal = val;
+  goalConfettiShownFor = null;
+  saveDailyGoal();
+  closeSheet();
+  render();
+}
+function clearGoal(){
+  dailyGoal = null;
+  saveDailyGoal();
+  closeSheet();
+  render();
+}
+
 function markVoiceReviewed(id){
   const v = voiceNotes.find(x=>x.id===id);
   if(v){ v.reviewed = true; saveVoiceNotes(); render(); }
@@ -1108,6 +1253,8 @@ function render(){
       </div>
     </div>
 
+    ${period==='today' ? renderGoalCard(netTotal) : ''}
+
     <div class="outstanding ${outstanding>0?'':'hidden'}">
       <span>💸 מגיע לך מלקוחות שטרם שילמו</span>
       <b>${fmt(outstanding)}</b>
@@ -1151,13 +1298,17 @@ function render(){
             <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.urgency==='special' ? ' · ⚡ ספיישל' : ''}${e.urgency==='relaxed' ? ' · 🕊️ נחת' : ''}${e.kind!=='fuel' && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
             <div class="meta">
               <span>${timeLabel(e.ts)}</span>
-              ${e.name ? `<span> · 👤 ${e.name}</span>` : ''}
-              ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}"> · 📞 ${e.phone}</a>` : ''}
-              ${e.kind!=='fuel' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
+              ${(e.kind!=='fuel' && !(e.name||e.phone)) ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
             </div>
+            ${(e.name || e.phone) ? `
+            <div class="contactline">
+              ${e.name ? `<span>👤 ${e.name}</span>` : ''}
+              ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}">📞 ${e.phone}</a>` : ''}
+              ${e.kind!=='fuel' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
+            </div>` : ''}
           </div>
           ${badgeFor(e)}
-          <div class="amt" style="color:${e.kind==='fuel'?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${e.kind==='fuel'?'-':''}${fmt(e.amount)}</div>
+          <div class="amt editable" onclick="openAmountEdit('${e.id}')" style="color:${e.kind==='fuel'?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${e.kind==='fuel'?'-':''}${fmt(e.amount)}</div>
           <div class="del" onclick="removeEntry('${e.id}')">✕</div>
         </div>
       `).join('')}
