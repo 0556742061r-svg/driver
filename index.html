@@ -14,6 +14,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
   :root{
     --bg:#14161A;
@@ -278,6 +281,43 @@
     padding:14px; cursor:pointer; border-radius:12px; background:var(--surface2);
   }
   .cancel:active{background:#363b42; color:var(--text);}
+
+  .loginwrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:24px;}
+  .loginlogo{text-align:center; margin-bottom:34px;}
+  .loginlogo .em{font-size:44px;}
+  .loginlogo h1{font-size:22px; font-weight:900; margin:10px 0 4px;}
+  .loginlogo p{font-size:13px; color:var(--muted); margin:0;}
+  .logincard{background:var(--surface); border:1px solid #2f333a; border-radius:20px; padding:22px;}
+  .googlebtn{
+    width:100%; padding:15px; border-radius:14px; background:#fff; color:#1f1f1f; border:none;
+    font-family:'Heebo',sans-serif; font-weight:700; font-size:14px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:18px;
+  }
+  .googlebtn:active{background:#eee;}
+  .divider{display:flex; align-items:center; gap:10px; margin:4px 0 18px; color:var(--muted); font-size:12px;}
+  .divider::before, .divider::after{content:""; flex:1; height:1px; background:#31353b;}
+  .authinput{
+    width:100%; padding:14px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Heebo',sans-serif; font-size:14px; margin-bottom:10px; direction:ltr;
+    text-align:right;
+  }
+  .authsubmit{
+    width:100%; padding:15px; border-radius:14px; background:var(--accent); color:var(--bg); border:none;
+    font-family:'Heebo',sans-serif; font-weight:700; font-size:14px; cursor:pointer; margin-top:4px;
+  }
+  .authsubmit:active{opacity:.9;}
+  .authtoggle{text-align:center; margin-top:16px; font-size:13px; color:var(--muted);}
+  .authtoggle b{color:var(--accent); cursor:pointer; font-weight:700;}
+  .autherr{
+    background:var(--unpaid-dim); border:1px solid #5a2f26; color:#f0b3a6; border-radius:12px;
+    padding:10px 14px; font-size:12.5px; margin-bottom:14px; display:none;
+  }
+  .authloading{text-align:center; padding:60px 20px; color:var(--muted); font-size:14px;}
+  .logoutlink{
+    text-align:center; margin:10px 18px 0; font-size:12px; color:var(--muted); padding:10px; cursor:pointer; opacity:.7;
+  }
+  .logoutlink:active{opacity:1;}
+  .useremail{text-align:center; font-size:11px; color:var(--muted); margin-top:2px;}
 </style>
 </head>
 <body>
@@ -410,7 +450,27 @@ function openWorkdayHistory(){
 
 const hasClaudeStorage = (typeof window.storage !== 'undefined' && window.storage);
 
+// ---- Firebase setup ----
+const firebaseConfig = {
+  apiKey: "AIzaSyC-9fQ1ScsVbNhT6DgyKgb5FgoTq40H0Ac",
+  authDomain: "driver-1353c.firebaseapp.com",
+  projectId: "driver-1353c",
+  storageBucket: "driver-1353c.firebasestorage.app",
+  messagingSenderId: "304713971262",
+  appId: "1:304713971262:web:94ae67980fd4af923d836f"
+};
+let fbApp = null, auth = null, db = null, currentUid = null, currentUserEmail = '';
+let fbUnsubscribers = [];
+let firebaseReady = false;
+try{
+  fbApp = firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+  firebaseReady = true;
+}catch(e){ console.error('Firebase init failed, falling back to local-only mode', e); }
+
 async function storageGet(key){
+  // Always reads from this device's local storage (used for reading pre-cloud data & migration)
   try{
     if(hasClaudeStorage){
       const r = await window.storage.get(key, false);
@@ -423,22 +483,93 @@ async function storageGet(key){
 }
 async function storageSet(key, value){
   try{
-    if(hasClaudeStorage){
+    if(currentUid && db){
+      const json = JSON.stringify(value);
+      if(json.length > 900000){
+        alert('יש יותר מדי נתונים לשמור בבת אחת (בדרך כלל בגלל הקלטות קול כבדות) - מחק כמה הקלטות ישנות שכבר טופלו ונסה שוב.');
+        return;
+      }
+      await db.collection('users').doc(currentUid).collection('data').doc(key).set({ value: json, updatedAt: Date.now() });
+    } else if(hasClaudeStorage){
       await window.storage.set(key, JSON.stringify(value), false);
     } else {
       localStorage.setItem(key, JSON.stringify(value));
     }
-  }catch(e){}
+  }catch(e){ console.error('storageSet failed', e); }
+}
+
+function fbDocRef(key){ return db.collection('users').doc(currentUid).collection('data').doc(key); }
+
+function detachFirestoreListeners(){
+  fbUnsubscribers.forEach(u=>{ try{ u(); }catch(e){} });
+  fbUnsubscribers = [];
+}
+
+function attachFirestoreListeners(){
+  detachFirestoreListeners();
+  fbUnsubscribers.push(fbDocRef(STORAGE_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    entries = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(TASKS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    tasks = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(VOICE_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    voiceNotes = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(WORKDAY_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    const arr = (d && d.value) ? JSON.parse(d.value) : [];
+    if(arr && arr.length){
+      workdayStart = arr[0];
+    } else if(workdayStart === null){
+      workdayStart = entries.length ? 0 : Date.now();
+      saveWorkdayStart();
+    }
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(WORKDAY_HISTORY_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    workdayHistory = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+}
+
+async function checkAndOfferLocalImport(){
+  try{
+    const cloudDoc = await fbDocRef(STORAGE_KEY).get();
+    const hasCloudData = cloudDoc.exists && cloudDoc.data().value && JSON.parse(cloudDoc.data().value).length > 0;
+    if(hasCloudData) return;
+    const localEntries = await storageGet(STORAGE_KEY);
+    if(localEntries && localEntries.length > 0){
+      const ok = confirm(`נמצאו ${localEntries.length} רשומות שמורות במכשיר הזה (מלפני ההתחברות). לייבא אותן לחשבון שלך?`);
+      if(!ok) return;
+      const [localTasks, localVoice, localWD, localWH] = await Promise.all([
+        storageGet(TASKS_KEY), storageGet(VOICE_KEY), storageGet(WORKDAY_KEY), storageGet(WORKDAY_HISTORY_KEY)
+      ]);
+      await storageSet(STORAGE_KEY, localEntries);
+      if(localTasks && localTasks.length) await storageSet(TASKS_KEY, localTasks);
+      if(localVoice && localVoice.length) await storageSet(VOICE_KEY, localVoice);
+      if(localWD && localWD.length) await storageSet(WORKDAY_KEY, localWD);
+      if(localWH && localWH.length) await storageSet(WORKDAY_HISTORY_KEY, localWH);
+      alert('הנתונים יובאו בהצלחה! ✅');
+    }
+  }catch(e){ console.error('import check failed', e); }
 }
 
 async function load(){
+  // Local-only fallback mode (used only if Firebase failed to initialize)
   entries = await storageGet(STORAGE_KEY);
   tasks = await storageGet(TASKS_KEY);
   voiceNotes = await storageGet(VOICE_KEY);
   const wsArr = await storageGet(WORKDAY_KEY);
   workdayStart = (wsArr && wsArr.length) ? wsArr[0] : null;
   if(workdayStart === null){
-    // First time seeing this feature: don't hide pre-existing entries from "today"
     workdayStart = entries.length ? 0 : Date.now();
     saveWorkdayStart();
   }
@@ -450,6 +581,92 @@ function saveTasks(){ storageSet(TASKS_KEY, tasks); }
 function saveVoiceNotes(){ storageSet(VOICE_KEY, voiceNotes); }
 function saveWorkdayStart(){ storageSet(WORKDAY_KEY, [workdayStart]); }
 function saveWorkdayHistory(){ storageSet(WORKDAY_HISTORY_KEY, workdayHistory); }
+
+// ---- Auth screens & actions ----
+let authMode = 'login';
+function renderLoginScreen(){
+  document.getElementById('overlay').classList.remove('open');
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="loginwrap">
+      <div class="loginlogo">
+        <div class="em">🚕</div>
+        <h1>המונה שלי</h1>
+        <p>נהל את הנסיעות, המשלוחים וההכנסות שלך</p>
+      </div>
+      <div class="logincard">
+        <div class="autherr" id="authErr"></div>
+        <button class="googlebtn" onclick="signInGoogle()">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.85 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.27c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.11-.28-1.7s.1-1.16.28-1.7V4.97H.96C.35 6.17 0 7.55 0 9s.35 2.83.96 4.03l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.97l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+          <span>המשך עם Google</span>
+        </button>
+        <div class="divider">או</div>
+        <input id="authEmail" class="authinput" type="email" placeholder="אימייל" autocomplete="email">
+        <input id="authPassword" class="authinput" type="password" placeholder="סיסמה" autocomplete="current-password">
+        <button class="authsubmit" onclick="submitEmailAuth()">${authMode==='login' ? 'התחברות' : 'הרשמה'}</button>
+        <div class="authtoggle">
+          ${authMode==='login' ? 'אין לך חשבון? <b onclick="toggleAuthMode()">להרשמה</b>' : 'כבר יש לך חשבון? <b onclick="toggleAuthMode()">להתחברות</b>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+function toggleAuthMode(){ authMode = (authMode==='login') ? 'signup' : 'login'; renderLoginScreen(); }
+function showAuthErr(msg){
+  const el = document.getElementById('authErr');
+  if(el){ el.textContent = msg; el.style.display = 'block'; }
+}
+function translateAuthError(code){
+  const map = {
+    'auth/invalid-email':'כתובת אימייל לא תקינה.',
+    'auth/user-not-found':'לא נמצא חשבון עם המייל הזה.',
+    'auth/wrong-password':'סיסמה שגויה.',
+    'auth/email-already-in-use':'כבר יש חשבון עם המייל הזה - נסה להתחבר במקום להירשם.',
+    'auth/weak-password':'הסיסמה חייבת להכיל לפחות 6 תווים.',
+    'auth/invalid-credential':'פרטי ההתחברות שגויים.',
+    'auth/popup-closed-by-user':'ההתחברות בוטלה.',
+    'auth/network-request-failed':'בעיית רשת - בדוק את החיבור לאינטרנט.'
+  };
+  return map[code] || ('שגיאה: ' + code);
+}
+function signInGoogle(){
+  if(!firebaseReady){ alert('החיבור לשרת לא זמין כרגע.'); return; }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err=>showAuthErr(translateAuthError(err.code)));
+}
+function submitEmailAuth(){
+  if(!firebaseReady){ alert('החיבור לשרת לא זמין כרגע.'); return; }
+  const email = (document.getElementById('authEmail').value||'').trim();
+  const pass = document.getElementById('authPassword').value||'';
+  if(!email || !pass){ showAuthErr('נא למלא אימייל וסיסמה.'); return; }
+  const action = (authMode==='login')
+    ? auth.signInWithEmailAndPassword(email, pass)
+    : auth.createUserWithEmailAndPassword(email, pass);
+  action.catch(err=>showAuthErr(translateAuthError(err.code)));
+}
+function signOutUser(){
+  if(!confirm('להתנתק מהחשבון?')) return;
+  detachFirestoreListeners();
+  auth.signOut();
+}
+
+if(firebaseReady){
+  document.getElementById('app').innerHTML = `<div class="authloading">טוען...</div>`;
+  auth.onAuthStateChanged(user=>{
+    if(user){
+      currentUid = user.uid;
+      currentUserEmail = user.email || '';
+      checkAndOfferLocalImport().then(attachFirestoreListeners);
+    } else {
+      currentUid = null;
+      currentUserEmail = '';
+      detachFirestoreListeners();
+      renderLoginScreen();
+    }
+  });
+} else {
+  load();
+}
 
 function addEntry(e){
   entries.push(e);
@@ -940,6 +1157,10 @@ function render(){
     </div>
 
     ${entries.length>0 ? `<div class="resetlink" onclick="resetAllData()">🗑️ איפוס כל הנתונים</div>` : ''}
+    ${currentUid ? `
+      <div class="useremail">מחובר כ-${currentUserEmail}</div>
+      <div class="logoutlink" onclick="signOutUser()">🚪 התנתקות</div>
+    ` : ''}
 
     <button class="fab" id="fabRec"
       onpointerdown="fabStart(event)" onpointerup="fabStop(event)"
@@ -1114,8 +1335,8 @@ function renderSheet(){
   `;
 }
 
-load();
 setInterval(()=>{
+  if(firebaseReady && !currentUid) return; // not logged in, login screen is showing - don't touch it
   const overlayOpen = document.getElementById('overlay').classList.contains('open');
   const anyAudioPlaying = Array.from(document.querySelectorAll('audio')).some(a=>!a.paused);
   if(!overlayOpen && !anyAudioPlaying && !fabRecording) render();
