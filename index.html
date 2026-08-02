@@ -344,6 +344,11 @@ let draft = null; // {kind:'passenger'|'delivery'|'install'|'fuel', digits:'', c
 let editTargetId = null; // set when adding debtor info to an already-saved entry
 let lastCommissionPct = { passenger:0, delivery:12, install:0 };
 
+const OWNER_EMAIL = '0556742061r@gmail.com';
+function isOwnerAccount(){
+  return currentUserEmail && currentUserEmail.toLowerCase() === OWNER_EMAIL.toLowerCase();
+}
+
 const CATS = {
   passenger:{label:'נסיעה', ic:'🚕'},
   delivery:{label:'משלוח', ic:'📦'},
@@ -466,6 +471,7 @@ try{
   fbApp = firebase.initializeApp(firebaseConfig);
   auth = firebase.auth();
   db = firebase.firestore();
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err=>console.error('persistence set failed', err));
   firebaseReady = true;
 }catch(e){ console.error('Firebase init failed, falling back to local-only mode', e); }
 
@@ -1119,9 +1125,10 @@ function render(){
       <button class="actbtn delivery" onclick="openDraft('delivery')">
         <span class="ic">📦</span> משלוח
       </button>
+      ${isOwnerAccount() ? `
       <button class="actbtn install" onclick="openDraft('install')">
         <span class="ic">🔧</span> התקנה
-      </button>
+      </button>` : ''}
     </div>
     <button class="fuelbtn" onclick="openDraft('fuel')"><span>⛽</span><span>הוספת הוצאת דלק</span></button>
 
@@ -1174,6 +1181,7 @@ function setPeriod(p){ period = p; viewingWorkdayId = null; render(); }
 
 // ---- Draft / modal (quick add) ----
 function openDraft(kind){
+  if(kind==='install' && !isOwnerAccount()) return;
   draft = { kind, digits:'', commissionPct: (kind==='fuel'||kind==='install') ? 0 : (lastCommissionPct[kind] ?? 0), contactOpen:false, forcedContact:false, name:'', phone:'', urgency:null, deadlineTime:'' };
   renderSheet();
   document.getElementById('overlay').classList.add('open');
