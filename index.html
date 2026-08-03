@@ -195,10 +195,10 @@
     font-family:'Roboto Mono',monospace; font-weight:700; font-size:15px; direction:ltr;
     min-width:56px; text-align:left; flex-shrink:0; padding-top:1px;
   }
-  .entry .amt.editable{cursor:pointer; border-bottom:1px dotted #4a4e55; padding-bottom:2px;}
-  .entry .amt.editable.nounderline{border-bottom:none; padding-bottom:0;}
-  .entry .amt.editable:active{color:var(--accent) !important;}
-  .entry .del{color:var(--muted); font-size:16px; padding:4px 6px; cursor:pointer; flex-shrink:0;}
+  .entry .amt{cursor:pointer;}
+  .entry .amt:active{color:var(--accent) !important;}
+  .entry .del{color:var(--muted); font-size:15px; padding:2px 6px; cursor:pointer;}
+  .rowactions{display:flex; flex-direction:column; align-items:center; gap:6px; flex-shrink:0; padding-top:1px;}
   .badge{
     font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap;
     border:none; font-family:'Heebo',sans-serif; min-width:64px; text-align:center; flex-shrink:0;
@@ -867,7 +867,7 @@ function renderTaskSheet(){
   const mm = String(now.getMinutes()).padStart(2,'0');
   const sheet = document.getElementById('sheet');
   sheet.innerHTML = `
-    <h2>🎯 הוספת יעד / תזכורת</h2>
+    <h2>⏰ הוספת תזכורת</h2>
     <input id="taskTitle" class="taskinput" type="text" placeholder="לדוגמה: משלוח לבני ברק">
     <input id="taskTime" class="taskinput" type="time" value="${hh}:${mm}">
     <div class="saverow">
@@ -1103,7 +1103,7 @@ function renderTasksSection(){
     if(minsLeft<=0) cls='overdue';
     else if(minsLeft<=30) cls='soon';
     const timeStr = new Date(t.deadline).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
-    const label = minsLeft<=0 ? `באיחור של ${Math.abs(minsLeft)} דק'` : (minsLeft<60 ? `עוד ${minsLeft} דק'` : `יעד ${timeStr}`);
+    const label = minsLeft<=0 ? `באיחור של ${Math.abs(minsLeft)} דק'` : (minsLeft<60 ? `עוד ${minsLeft} דק'` : `עד השעה ${timeStr}`);
     return `
       <div class="task ${cls}">
         <div class="taskmid">
@@ -1247,7 +1247,7 @@ function render(){
     </div>`}
 
     ${renderTasksSection()}
-    <button class="taskbtn" onclick="openTaskModal()"><span>🎯</span><span>הוספת יעד / תזכורת עם שעה</span></button>
+    <button class="taskbtn" onclick="openTaskModal()"><span>⏰</span><span>הוספת תזכורת עם שעה</span></button>
     ${renderVoiceSection()}
 
     <div class="meter">
@@ -1304,18 +1304,19 @@ function render(){
             <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.urgency==='special' ? ' · ⚡ ספיישל' : ''}${e.urgency==='relaxed' ? ' · 🕊️ נחת' : ''}${e.kind!=='fuel' && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
             <div class="meta">
               <span>${timeLabel(e.ts)}</span>
-              ${(e.kind!=='fuel' && !(e.name||e.phone)) ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
             </div>
             ${(e.name || e.phone) ? `
             <div class="contactline">
               ${e.name ? `<span>👤 ${e.name}</span>` : ''}
               ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}">📞 ${e.phone}</a>` : ''}
-              ${e.kind!=='fuel' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
             </div>` : ''}
           </div>
           ${badgeFor(e)}
-          <div class="amt editable${e.kind==='fuel' ? ' nounderline' : ''}" onclick="openAmountEdit('${e.id}')" style="color:${e.kind==='fuel'?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${fmt(e.amount)}</div>
-          <div class="del" onclick="removeEntry('${e.id}')">✕</div>
+          <div class="amt" onclick="openAmountEdit('${e.id}')" style="color:${e.kind==='fuel'?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${fmt(e.amount)}</div>
+          <div class="rowactions">
+            ${e.kind!=='fuel' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
+            <div class="del" onclick="removeEntry('${e.id}')">✕</div>
+          </div>
         </div>
       `).join('')}
     </div>
