@@ -113,8 +113,9 @@
   .actbtn.passenger{background:var(--accent);}
   .actbtn.delivery{background:#e6e6e6;}
   .actbtn.install{background:#4FD1C5;}
+  .expenserow{display:flex; gap:10px; margin:0 18px;}
   .fuelbtn{
-    width:calc(100% - 36px); margin:0 18px; padding:12px; border-radius:14px; border:1px dashed #45494f;
+    flex:1; padding:12px; border-radius:14px; border:1px dashed #45494f;
     background:transparent; color:var(--muted); font-family:'Heebo',sans-serif; font-weight:500;
     font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
   }
@@ -193,7 +194,7 @@
   .contactline a{color:var(--accent); text-decoration:none; direction:ltr; unicode-bidi:isolate;}
   .entry .amt{
     font-family:'Roboto Mono',monospace; font-weight:700; font-size:15px; direction:ltr;
-    min-width:56px; text-align:left; flex-shrink:0; padding-top:1px;
+    width:68px; text-align:right; flex-shrink:0; padding-top:1px; white-space:nowrap;
   }
   .entry .amt{cursor:pointer;}
   .entry .amt:active{color:var(--accent) !important;}
@@ -397,15 +398,18 @@ const CATS = {
   passenger:{label:'נסיעה', ic:'🚕'},
   delivery:{label:'משלוח', ic:'📦'},
   install:{label:'התקנה', ic:'🔧'},
-  fuel:{label:'דלק', ic:'⛽'}
+  fuel:{label:'דלק', ic:'⛽'},
+  food:{label:'אוכל', ic:'🍔'}
 };
+const EXPENSE_KINDS = ['fuel','food'];
+function isExpenseKind(k){ return EXPENSE_KINDS.includes(k); }
 
 function fmt(n){
   return '₪' + n.toLocaleString('he-IL', {minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits:2});
 }
 
 function netOf(e){
-  if(e.kind==='fuel') return -e.amount;
+  if(isExpenseKind(e.kind)) return -e.amount;
   if(e.status==='cancelled'){
     if(e.commissionPct>0 && e.chargeStatus==='charged') return -(e.amount * (e.commissionPct/100));
     return 0;
@@ -1073,7 +1077,7 @@ function removeEntry(id){
 }
 
 function badgeFor(e){
-  if(e.kind==='fuel') return '';
+  if(isExpenseKind(e.kind)) return '';
   if(e.status==='cancelled'){
     if(!e.commissionPct) return `<span class="cancelledtag">בוטלה</span>`;
     const labels = {pending:'לבדוק חיוב', charged:'חויבתי 12%', cleared:'בוטל בהצלחה'};
@@ -1219,7 +1223,7 @@ function removeVoiceNote(id){
 function render(){
   const list = filtered();
   const netTotal = list.reduce((s,e)=> s + netOf(e), 0);
-  const outstanding = list.filter(e=>e.kind!=='fuel' && e.status==='unpaid')
+  const outstanding = list.filter(e=>!isExpenseKind(e.kind) && e.status==='unpaid')
                            .reduce((s,e)=> s + netOf(e), 0);
   const pendingCharges = list.filter(e=>e.status==='cancelled' && e.commissionPct>0 && e.chargeStatus==='pending');
   const pendingChargeSum = pendingCharges.reduce((s,e)=> s + e.amount*0.12, 0);
@@ -1254,8 +1258,9 @@ function render(){
       <div class="label">${period!=='today' ? (period==='week'?'רווח נטו · השבוע':period==='month'?'רווח נטו · החודש':'רווח נטו · הכל') : (viewingWorkdayId ? 'רווח נטו · יום נבחר' : 'רווח נטו · יום עבודה נוכחי')}</div>
       <div class="amount"><span>₪</span>${netTotal.toLocaleString('he-IL',{minimumFractionDigits:0, maximumFractionDigits:0})}</div>
       <div class="sub">
-        <span>נסיעות: <b>${list.filter(e=>e.kind!=='fuel').length}</b></span>
+        <span>נסיעות: <b>${list.filter(e=>!isExpenseKind(e.kind)).length}</b></span>
         <span>דלק: <b>${fmt(list.filter(e=>e.kind==='fuel').reduce((s,e)=>s+e.amount,0))}</b></span>
+        <span>אוכל: <b>${fmt(list.filter(e=>e.kind==='food').reduce((s,e)=>s+e.amount,0))}</b></span>
       </div>
     </div>
 
@@ -1283,7 +1288,10 @@ function render(){
         <span class="ic">🔧</span> התקנה
       </button>` : ''}
     </div>
-    <button class="fuelbtn" onclick="openDraft('fuel')"><span>⛽</span><span>הוספת הוצאת דלק</span></button>
+    <div class="expenserow">
+      <button class="fuelbtn" onclick="openDraft('fuel')"><span>⛽</span><span>דלק</span></button>
+      <button class="fuelbtn" onclick="openDraft('food')"><span>🍔</span><span>אוכל</span></button>
+    </div>
 
     <div class="tabs">
       ${['today','week','month','all'].map(p=>`
@@ -1301,7 +1309,7 @@ function render(){
         <div class="entry">
           <div class="ic">${CATS[e.kind].ic}</div>
           <div class="mid">
-            <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.urgency==='special' ? ' · ⚡ ספיישל' : ''}${e.urgency==='relaxed' ? ' · 🕊️ נחת' : ''}${e.kind!=='fuel' && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
+            <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.urgency==='special' ? ' · ⚡ ספיישל' : ''}${e.urgency==='relaxed' ? ' · 🕊️ נחת' : ''}${!isExpenseKind(e.kind) && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
             <div class="meta">
               <span>${timeLabel(e.ts)}</span>
             </div>
@@ -1312,9 +1320,9 @@ function render(){
             </div>` : ''}
           </div>
           ${badgeFor(e)}
-          <div class="amt" onclick="openAmountEdit('${e.id}')" style="color:${e.kind==='fuel'?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${fmt(e.amount)}</div>
+          <div class="amt" onclick="openAmountEdit('${e.id}')" style="color:${isExpenseKind(e.kind)?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${fmt(e.amount)}</div>
           <div class="rowactions">
-            ${e.kind!=='fuel' ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
+            ${!isExpenseKind(e.kind) ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
             <div class="del" onclick="removeEntry('${e.id}')">✕</div>
           </div>
         </div>
@@ -1340,7 +1348,7 @@ function setPeriod(p){ period = p; viewingWorkdayId = null; render(); }
 // ---- Draft / modal (quick add) ----
 function openDraft(kind){
   if(kind==='install' && !isOwnerAccount()) return;
-  draft = { kind, digits:'', commissionPct: (kind==='fuel'||kind==='install') ? 0 : (lastCommissionPct[kind] ?? 0), contactOpen:false, forcedContact:false, name:'', phone:'', urgency:null, deadlineTime:'' };
+  draft = { kind, digits:'', commissionPct: (isExpenseKind(kind)||kind==='install') ? 0 : (lastCommissionPct[kind] ?? 0), contactOpen:false, forcedContact:false, name:'', phone:'', urgency:null, deadlineTime:'' };
   renderSheet();
   document.getElementById('overlay').classList.add('open');
 }
@@ -1392,28 +1400,28 @@ function commitDraft(status){
   const amount = parseFloat(draft.digits || '0');
   if(!amount || amount<=0){ return; }
 
-  if(status==='unpaid' && draft.kind!=='fuel' && !draft.forcedContact){
+  if(status==='unpaid' && !isExpenseKind(draft.kind) && !draft.forcedContact){
     draft.forcedContact = true;
     draft.contactOpen = true;
     renderSheet();
     return;
   }
 
-  if(draft.kind!=='fuel') lastCommissionPct[draft.kind] = draft.commissionPct;
+  if(!isExpenseKind(draft.kind)) lastCommissionPct[draft.kind] = draft.commissionPct;
   addEntry({
     id: 'e'+Date.now()+Math.random().toString(36).slice(2,7),
     kind: draft.kind,
     amount,
-    commissionPct: draft.kind==='fuel' ? 0 : (draft.commissionPct||0),
-    status: draft.kind==='fuel' ? 'paid' : status,
+    commissionPct: isExpenseKind(draft.kind) ? 0 : (draft.commissionPct||0),
+    status: isExpenseKind(draft.kind) ? 'paid' : status,
     chargeStatus: status==='cancelled' ? 'pending' : null,
-    name: draft.kind==='fuel' ? '' : (draft.name || '').trim(),
-    phone: draft.kind==='fuel' ? '' : (draft.phone || '').trim(),
-    urgency: draft.kind==='fuel' ? null : draft.urgency,
+    name: isExpenseKind(draft.kind) ? '' : (draft.name || '').trim(),
+    phone: isExpenseKind(draft.kind) ? '' : (draft.phone || '').trim(),
+    urgency: isExpenseKind(draft.kind) ? null : draft.urgency,
     ts: currentTs()
   });
 
-  if(draft.kind!=='fuel' && draft.urgency==='relaxed' && draft.deadlineTime){
+  if(!isExpenseKind(draft.kind) && draft.urgency==='relaxed' && draft.deadlineTime){
     const [h,m] = draft.deadlineTime.split(':').map(Number);
     const d = new Date();
     d.setHours(h, m, 0, 0);
@@ -1454,7 +1462,7 @@ function renderSheet(){
   sheet.innerHTML = `
     <h2>${cat.ic} הוספת ${cat.label}</h2>
     <div class="display"><div class="val mono">₪${amountVal}</div></div>
-    ${draft.kind!=='fuel' ? `
+    ${!isExpenseKind(draft.kind) ? `
       ${draft.kind!=='install' ? `
       <div class="commlabel">אחוז ניכוי מהנסיעה</div>
       <div class="commquick">
@@ -1488,7 +1496,7 @@ function renderSheet(){
         <button class="key ${k==='back'?'fn':''}" onclick="pressKey('${k}')">${k==='back'?'⌫':k}</button>
       `).join('')}
     </div>
-    ${draft.kind==='fuel' ? `
+    ${isExpenseKind(draft.kind) ? `
       <div class="saverow">
         <button class="savebtn single" onclick="commitDraft('paid')"><span>💾</span><span>שמירה</span></button>
       </div>` : `
