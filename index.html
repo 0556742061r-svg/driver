@@ -376,6 +376,8 @@ const VOICE_KEY = 'voicenotes_v1';
 const WORKDAY_KEY = 'workday_v1';
 const WORKDAY_HISTORY_KEY = 'workdayhistory_v1';
 const GOAL_KEY = 'dailygoal_v1';
+const DEBTS_KEY = 'debts_v1';
+const DEBT_PAYMENTS_KEY = 'debtpayments_v1';
 let entries = [];
 let tasks = [];
 let voiceNotes = [];
@@ -384,6 +386,10 @@ let workdayHistory = [];
 let viewingWorkdayId = null;
 let dailyGoal = null;
 let goalConfettiShownFor = null;
+let debts = [];
+let debtPayments = [];
+let currentScreen = 'main'; // 'main' | 'debts'
+let debtEditTargetId = null;
 let period = 'today';
 let draft = null; // {kind:'passenger'|'delivery'|'install'|'fuel', digits:'', commissionPct:number}
 let editTargetId = null; // set when adding debtor info to an already-saved entry
@@ -598,6 +604,16 @@ function attachFirestoreListeners(){
     dailyGoal = (arr && arr.length) ? arr[0] : null;
     render();
   }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(DEBTS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    debts = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(DEBT_PAYMENTS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    debtPayments = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
 }
 
 async function checkAndOfferLocalImport(){
@@ -636,6 +652,8 @@ async function load(){
   workdayHistory = await storageGet(WORKDAY_HISTORY_KEY);
   const goalArr = await storageGet(GOAL_KEY);
   dailyGoal = (goalArr && goalArr.length) ? goalArr[0] : null;
+  debts = await storageGet(DEBTS_KEY);
+  debtPayments = await storageGet(DEBT_PAYMENTS_KEY);
   render();
 }
 function save(){ storageSet(STORAGE_KEY, entries); }
@@ -644,6 +662,8 @@ function saveVoiceNotes(){ storageSet(VOICE_KEY, voiceNotes); }
 function saveWorkdayStart(){ storageSet(WORKDAY_KEY, [workdayStart]); }
 function saveWorkdayHistory(){ storageSet(WORKDAY_HISTORY_KEY, workdayHistory); }
 function saveDailyGoal(){ storageSet(GOAL_KEY, dailyGoal===null ? [] : [dailyGoal]); }
+function saveDebts(){ storageSet(DEBTS_KEY, debts); }
+function saveDebtPayments(){ storageSet(DEBT_PAYMENTS_KEY, debtPayments); }
 
 // ---- Auth screens & actions ----
 let authMode = 'login';
@@ -1220,7 +1240,249 @@ function removeVoiceNote(id){
   saveVoiceNotes(); render();
 }
 
+// ---- Debt management ----
+function debtPaidAmount(debtId){
+  return debtPayments.filter(p=>p.debtId===debtId).reduce((s,p)=>s+p.amount, 0);
+}
+function debtRemaining(debt){
+  return Math.max(0, debt.totalOwed - debtPaidAmount(debt.id));
+}
+function totalDebtRemaining(){
+  return debts.reduce((s,d)=>s+debtRemaining(d), 0);
+}
+function totalDebtPaidAllTime(){
+  return debtPayments.reduce((s,p)=>s+p.amount, 0);
+}
+
+function renderDebtEntryPoint(){
+  const remaining = totalDebtRemaining();
+  if(debts.length===0){
+    return `<div class="workdaybar" style="cursor:pointer;" onclick="openDebtsScreen()">
+      <span>💳 ניהול חובות והחזרים</span>
+      <span class="wdbtn">פתיחה</span>
+    </div>`;
+  }
+  return `<div class="workdaybar" style="cursor:pointer;" onclick="openDebtsScreen()">
+    <span>💳 סה"כ חוב שנותר: <b style="color:var(--unpaid); font-family:'Roboto Mono',monospace;">${fmt(remaining)}</b></span>
+    <span class="wdbtn">ניהול</span>
+  </div>`;
+}
+
+function openDebtsScreen(){
+  currentScreen = 'debts';
+  render();
+}
+function backToMain(){
+  currentScreen = 'main';
+  render();
+}
+
+function renderDebtsScreen(){
+  const app = document.getElementById('app');
+  const totalRemaining = totalDebtRemaining();
+  const totalOwedOriginal = debts.reduce((s,d)=>s+d.totalOwed, 0);
+  const totalPaid = totalDebtPaidAllTime();
+  const overallPct = totalOwedOriginal>0 ? Math.min(100, Math.round((totalPaid/totalOwedOriginal)*100)) : 0;
+  const sorted = [...debts].sort((a,b)=> debtRemaining(b) - debtRemaining(a));
+
+  app.innerHTML = `
+    <header>
+      <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
+      <h1>💳 ניהול חובות</h1>
+      <div class="date mono"></div>
+    </header>
+
+    <div class="meter">
+      <div class="label">סה"כ חוב שנותר</div>
+      <div class="amount"><span>₪</span>${totalRemaining.toLocaleString('he-IL',{maximumFractionDigits:0})}</div>
+      <div class="sub">
+        <span>שולם עד כה: <b>${fmt(totalPaid)}</b></span>
+        <span>מתוך: <b>${fmt(totalOwedOriginal)}</b></span>
+      </div>
+    </div>
+
+    ${debts.length>0 ? `
+    <div class="goalcard">
+      <div class="goalhead"><div class="goallabel">התקדמות כוללת בהחזר החוב</div><div class="goalnums">${overallPct}%</div></div>
+      <div class="goalbar"><div class="goalbarfill ${overallPct>=100?'done':''}" style="width:${overallPct}%"></div></div>
+    </div>
+    ${renderDebtChart()}
+    ` : ''}
+
+    <div class="actions" style="margin-top:16px;">
+      <button class="actbtn passenger" onclick="openDebtSheet()" style="flex:1;">
+        <span class="ic">➕</span> הוספת בעל חוב
+      </button>
+      ${debts.length>0 ? `
+      <button class="actbtn delivery" onclick="openSmartSplitCalc()" style="flex:1;">
+        <span class="ic">🧮</span> חלוקה חכמה
+      </button>` : ''}
+    </div>
+
+    <div class="listwrap" style="margin-top:14px;">
+      ${sorted.length===0 ? `
+        <div class="empty">
+          <span class="ic">💳</span>
+          עדיין לא הוספת בעלי חוב.<br>לחץ למעלה על "הוספת בעל חוב" כדי להתחיל לעקוב.
+        </div>` : sorted.map(d=>{
+          const remaining = debtRemaining(d);
+          const paid = debtPaidAmount(d.id);
+          const pct = d.totalOwed>0 ? Math.min(100, Math.round((paid/d.totalOwed)*100)) : 0;
+          const isDone = remaining<=0;
+          return `
+          <div class="task ok" style="margin-bottom:10px;">
+            <div class="taskmid" style="width:100%;">
+              <div class="taskttl">${d.creditorName} ${isDone?'✅':''}</div>
+              <div class="tasktime">נותר ${fmt(remaining)} מתוך ${fmt(d.totalOwed)} · ${pct}%</div>
+              <div class="goalbar" style="height:8px; margin-top:8px;">
+                <div class="goalbarfill ${isDone?'done':''}" style="width:${pct}%"></div>
+              </div>
+            </div>
+          </div>
+          <div class="expenserow" style="margin:-4px 18px 14px;">
+            ${!isDone ? `<button class="fuelbtn" onclick="openPaymentSheet('${d.id}')">💰 רישום תשלום</button>` : ''}
+            <button class="fuelbtn" onclick="openDebtSheet('${d.id}')">✏️ עריכה</button>
+            <button class="fuelbtn" onclick="deleteDebt('${d.id}')">🗑️</button>
+          </div>
+        `;
+        }).join('')}
+    </div>
+  `;
+}
+
+function renderDebtChart(){
+  const sortedPayments = [...debtPayments].sort((a,b)=>a.ts-b.ts);
+  if(sortedPayments.length < 2) return '';
+  let cum = 0;
+  const points = sortedPayments.map(p=>{ cum += p.amount; return { ts:p.ts, cum }; });
+  const maxCum = points[points.length-1].cum || 1;
+  const minTs = points[0].ts, maxTs = points[points.length-1].ts || minTs+1;
+  const W = 300, H = 90, pad = 8;
+  const coords = points.map(p=>{
+    const x = pad + (maxTs>minTs ? ((p.ts-minTs)/(maxTs-minTs)) : 0) * (W-2*pad);
+    const y = H-pad - (p.cum/maxCum) * (H-2*pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `
+    <div class="goalcard" style="padding:14px 16px;">
+      <div class="goallabel" style="margin-bottom:8px;">התקדמות תשלומים לאורך זמן</div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%; height:80px; display:block;">
+        <polyline points="${coords}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:4px; font-family:'Roboto Mono',monospace;">
+        <span>${new Date(minTs).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'})}</span>
+        <span>סה"כ שולם: ${fmt(maxCum)}</span>
+        <span>${new Date(maxTs).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'})}</span>
+      </div>
+    </div>
+  `;
+}
+
+function openDebtSheet(id){
+  debtEditTargetId = id || null;
+  const d = id ? debts.find(x=>x.id===id) : null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>💳 ${d ? 'עריכת בעל חוב' : 'הוספת בעל חוב'}</h2>
+    <input id="debtName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם בעל החוב" value="${d ? d.creditorName : ''}">
+    <input id="debtTotal" class="goalinput" type="number" inputmode="decimal" placeholder="סכום החוב הכולל" value="${d ? d.totalOwed : ''}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitDebt()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitDebt(){
+  const name = (document.getElementById('debtName').value || '').trim();
+  const total = parseFloat(document.getElementById('debtTotal').value || '0');
+  if(!name || !total || total<=0) return;
+  if(debtEditTargetId){
+    const d = debts.find(x=>x.id===debtEditTargetId);
+    if(d){ d.creditorName = name; d.totalOwed = total; }
+  } else {
+    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, createdTs:Date.now() });
+  }
+  saveDebts();
+  debtEditTargetId = null;
+  closeSheet();
+  render();
+}
+function deleteDebt(id){
+  if(!confirm('למחוק את בעל החוב הזה? היסטוריית התשלומים שלו תימחק גם היא.')) return;
+  debts = debts.filter(x=>x.id!==id);
+  debtPayments = debtPayments.filter(p=>p.debtId!==id);
+  saveDebts();
+  saveDebtPayments();
+  render();
+}
+function openPaymentSheet(debtId){
+  debtEditTargetId = debtId;
+  const d = debts.find(x=>x.id===debtId);
+  if(!d) return;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>💰 רישום תשלום ל${d.creditorName}</h2>
+    <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:10px;">נותר לשלם: ${fmt(debtRemaining(d))}</div>
+    <input id="paymentAmount" class="goalinput" type="number" inputmode="decimal" placeholder="סכום ששולם">
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitPayment()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitPayment(){
+  const amount = parseFloat(document.getElementById('paymentAmount').value || '0');
+  if(!amount || amount<=0) return;
+  debtPayments.push({ id:'pmt'+Date.now()+Math.random().toString(36).slice(2,7), debtId:debtEditTargetId, amount, ts:Date.now() });
+  saveDebtPayments();
+  debtEditTargetId = null;
+  closeSheet();
+  render();
+}
+
+function openSmartSplitCalc(){
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>🧮 חלוקה חכמה ויחסית</h2>
+    <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:12px;">
+      תגיד כמה כסף יש לך החודש להחזר חובות בסה"כ, ואני אחלק לך לפי היחס בין כל חוב - מי שחייבים לו יותר, מקבל חלק יחסית גדול יותר.
+    </div>
+    <input id="splitBudget" class="goalinput" type="number" inputmode="decimal" placeholder="סכום כולל להחזרים החודש">
+    <div class="saverow">
+      <button class="savebtn single" onclick="computeSmartSplit()">📊 חשב חלוקה</button>
+    </div>
+    <div id="splitResults" style="margin-top:14px;"></div>
+    <div class="cancel" onclick="closeSheet()">סגירה</div>
+  `;
+}
+function computeSmartSplit(){
+  const budget = parseFloat(document.getElementById('splitBudget').value || '0');
+  const resultsEl = document.getElementById('splitResults');
+  if(!budget || budget<=0){ resultsEl.innerHTML = ''; return; }
+  const active = debts.filter(d=>debtRemaining(d)>0);
+  const totalRemaining = active.reduce((s,d)=>s+debtRemaining(d), 0);
+  if(totalRemaining<=0){ resultsEl.innerHTML = `<div style="text-align:center; color:var(--muted); font-size:13px;">אין חובות פתוחים לחלק ביניהם 🎉</div>`; return; }
+  const rows = active.sort((a,b)=>debtRemaining(b)-debtRemaining(a)).map(d=>{
+    const rem = debtRemaining(d);
+    const share = rem/totalRemaining;
+    const suggested = Math.round(budget * share);
+    return `
+      <div class="task ok" style="margin-bottom:8px;">
+        <div class="taskmid">
+          <div class="taskttl">${d.creditorName}</div>
+          <div class="tasktime">${Math.round(share*100)}% מהחוב הכולל</div>
+        </div>
+        <div class="amt" style="width:auto; color:var(--accent);">${fmt(suggested)}</div>
+      </div>`;
+  }).join('');
+  resultsEl.innerHTML = `<div style="font-size:11.5px; color:var(--muted); margin-bottom:8px;">הצעת חלוקה (אפשר לעגל/לשנות ידנית לפי מה שנוח):</div>${rows}`;
+}
+
 function render(){
+  if(currentScreen === 'debts'){ renderDebtsScreen(); return; }
   const list = filtered();
   const netTotal = list.reduce((s,e)=> s + netOf(e), 0);
   const outstanding = list.filter(e=>!isExpenseKind(e.kind) && e.status==='unpaid')
@@ -1265,6 +1527,7 @@ function render(){
     </div>
 
     ${period==='today' ? renderGoalCard(netTotal) : ''}
+    ${renderDebtEntryPoint()}
 
     <div class="outstanding ${outstanding>0?'':'hidden'}">
       <span>💸 מגיע לך מלקוחות שטרם שילמו</span>
