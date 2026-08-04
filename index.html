@@ -474,6 +474,48 @@ function endWorkday(){
   viewingWorkdayId = null;
   render();
 }
+function openWorkdayStartEdit(){
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  const d = new Date(workdayStart);
+  const pad = n=>String(n).padStart(2,'0');
+  const dtVal = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const lastClosed = [...workdayHistory].sort((a,b)=>b.end-a.end)[0];
+  sheet.innerHTML = `
+    <h2>✏️ תיקון שעת תחילת יום העבודה</h2>
+    <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:12px;">
+      אם היום "התאפס" לבד באמצע (למשל בגלל תקלה), אפשר לתקן כאן ידנית מתי באמת התחיל יום העבודה.
+    </div>
+    <input id="workdayStartInput" class="goalinput" style="font-size:16px;" type="datetime-local" value="${dtVal}">
+    <div class="saverow" style="margin-top:14px;">
+      <button class="savebtn single" onclick="submitWorkdayStartEdit()">💾 שמירה</button>
+    </div>
+    ${lastClosed ? `<div class="contacttoggle" onclick="mergeLastClosedWorkday('${lastClosed.id}')">🔗 מיזוג עם היום הקודם שנסגר (${new Date(lastClosed.start).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}–${new Date(lastClosed.end).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})})</div>` : ''}
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitWorkdayStartEdit(){
+  const val = document.getElementById('workdayStartInput').value;
+  if(!val) return;
+  const ts = new Date(val).getTime();
+  if(isNaN(ts)) return;
+  workdayStart = ts;
+  saveWorkdayStart();
+  closeSheet();
+  render();
+}
+function mergeLastClosedWorkday(id){
+  const wd = workdayHistory.find(w=>w.id===id);
+  if(!wd) return;
+  if(!confirm('זה ימחק את הפיצול ויאחד את הימים חזרה יחד. להמשיך?')) return;
+  workdayHistory = workdayHistory.filter(w=>w.id!==id);
+  workdayStart = wd.start;
+  saveWorkdayHistory();
+  saveWorkdayStart();
+  viewingWorkdayId = null;
+  closeSheet();
+  render();
+}
 function viewWorkday(id){
   viewingWorkdayId = id;
   period = 'today';
@@ -1485,7 +1527,7 @@ function render(){
         <button class="wdbtn" onclick="exitWorkdayView()">↩️ חזרה להיום</button>
       </div>`;
     })() : `<div class="workdaybar">
-      <span>יום עבודה החל ${new Date(workdayStart).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</span>
+      <span onclick="openWorkdayStartEdit()" style="cursor:pointer; text-decoration:underline dotted;">✏️ יום עבודה החל ${new Date(workdayStart).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</span>
       <div style="display:flex; gap:6px;">
         <button class="wdbtn" onclick="openWorkdayHistory()">📅 ימים קודמים</button>
         <button class="wdbtn end" onclick="endWorkday()">🌙 סיום יום</button>
