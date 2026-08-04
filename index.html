@@ -1313,10 +1313,6 @@ function renderDebtsScreen(){
       <button class="actbtn passenger" onclick="openDebtSheet()" style="flex:1;">
         <span class="ic">➕</span> הוספת בעל חוב
       </button>
-      ${debts.length>0 ? `
-      <button class="actbtn delivery" onclick="openSmartSplitCalc()" style="flex:1;">
-        <span class="ic">🧮</span> חלוקה חכמה
-      </button>` : ''}
     </div>
 
     <div class="listwrap" style="margin-top:14px;">
@@ -1334,6 +1330,7 @@ function renderDebtsScreen(){
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">${d.creditorName} ${isDone?'✅':''}</div>
               <div class="tasktime">נותר ${fmt(remaining)} מתוך ${fmt(d.totalOwed)} · ${pct}%</div>
+              ${(d.monthlyAgreed && !isDone) ? `<div class="tasktime">🤝 הסדר: ${fmt(d.monthlyAgreed)}/חודש · נשאר כ-${Math.ceil(remaining/d.monthlyAgreed)} חודשים</div>` : ''}
               <div class="goalbar" style="height:8px; margin-top:8px;">
                 <div class="goalbarfill ${isDone?'done':''}" style="width:${pct}%"></div>
               </div>
@@ -1387,7 +1384,9 @@ function openDebtSheet(id){
     <h2>💳 ${d ? 'עריכת בעל חוב' : 'הוספת בעל חוב'}</h2>
     <input id="debtName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם בעל החוב" value="${d ? d.creditorName : ''}">
     <input id="debtTotal" class="goalinput" type="number" inputmode="decimal" placeholder="סכום החוב הכולל" value="${d ? d.totalOwed : ''}">
-    <div class="saverow">
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:2px 0 10px;">מה סיכמת מול בעל החוב? (לא חובה - רק אם כבר יש הסדר)</div>
+    <input id="debtMonthly" class="contactinput" style="width:100%;" type="number" inputmode="decimal" placeholder="תשלום חודשי מוסכם (לא חובה)" value="${d && d.monthlyAgreed ? d.monthlyAgreed : ''}">
+    <div class="saverow" style="margin-top:14px;">
       <button class="savebtn single" onclick="submitDebt()">💾 שמירה</button>
     </div>
     <div class="cancel" onclick="closeSheet()">ביטול</div>
@@ -1396,12 +1395,14 @@ function openDebtSheet(id){
 function submitDebt(){
   const name = (document.getElementById('debtName').value || '').trim();
   const total = parseFloat(document.getElementById('debtTotal').value || '0');
+  const monthlyVal = parseFloat(document.getElementById('debtMonthly').value || '0');
+  const monthlyAgreed = monthlyVal>0 ? monthlyVal : null;
   if(!name || !total || total<=0) return;
   if(debtEditTargetId){
     const d = debts.find(x=>x.id===debtEditTargetId);
-    if(d){ d.creditorName = name; d.totalOwed = total; }
+    if(d){ d.creditorName = name; d.totalOwed = total; d.monthlyAgreed = monthlyAgreed; }
   } else {
-    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, createdTs:Date.now() });
+    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, monthlyAgreed, createdTs:Date.now() });
   }
   saveDebts();
   debtEditTargetId = null;
@@ -1425,7 +1426,7 @@ function openPaymentSheet(debtId){
   sheet.innerHTML = `
     <h2>💰 רישום תשלום ל${d.creditorName}</h2>
     <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:10px;">נותר לשלם: ${fmt(debtRemaining(d))}</div>
-    <input id="paymentAmount" class="goalinput" type="number" inputmode="decimal" placeholder="סכום ששולם">
+    <input id="paymentAmount" class="goalinput" type="number" inputmode="decimal" placeholder="סכום ששולם" value="${d.monthlyAgreed || ''}">
     <div class="saverow">
       <button class="savebtn single" onclick="submitPayment()">💾 שמירה</button>
     </div>
@@ -1440,45 +1441,6 @@ function submitPayment(){
   debtEditTargetId = null;
   closeSheet();
   render();
-}
-
-function openSmartSplitCalc(){
-  document.getElementById('overlay').classList.add('open');
-  const sheet = document.getElementById('sheet');
-  sheet.innerHTML = `
-    <h2>🧮 חלוקה חכמה ויחסית</h2>
-    <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:12px;">
-      תגיד כמה כסף יש לך החודש להחזר חובות בסה"כ, ואני אחלק לך לפי היחס בין כל חוב - מי שחייבים לו יותר, מקבל חלק יחסית גדול יותר.
-    </div>
-    <input id="splitBudget" class="goalinput" type="number" inputmode="decimal" placeholder="סכום כולל להחזרים החודש">
-    <div class="saverow">
-      <button class="savebtn single" onclick="computeSmartSplit()">📊 חשב חלוקה</button>
-    </div>
-    <div id="splitResults" style="margin-top:14px;"></div>
-    <div class="cancel" onclick="closeSheet()">סגירה</div>
-  `;
-}
-function computeSmartSplit(){
-  const budget = parseFloat(document.getElementById('splitBudget').value || '0');
-  const resultsEl = document.getElementById('splitResults');
-  if(!budget || budget<=0){ resultsEl.innerHTML = ''; return; }
-  const active = debts.filter(d=>debtRemaining(d)>0);
-  const totalRemaining = active.reduce((s,d)=>s+debtRemaining(d), 0);
-  if(totalRemaining<=0){ resultsEl.innerHTML = `<div style="text-align:center; color:var(--muted); font-size:13px;">אין חובות פתוחים לחלק ביניהם 🎉</div>`; return; }
-  const rows = active.sort((a,b)=>debtRemaining(b)-debtRemaining(a)).map(d=>{
-    const rem = debtRemaining(d);
-    const share = rem/totalRemaining;
-    const suggested = Math.round(budget * share);
-    return `
-      <div class="task ok" style="margin-bottom:8px;">
-        <div class="taskmid">
-          <div class="taskttl">${d.creditorName}</div>
-          <div class="tasktime">${Math.round(share*100)}% מהחוב הכולל</div>
-        </div>
-        <div class="amt" style="width:auto; color:var(--accent);">${fmt(suggested)}</div>
-      </div>`;
-  }).join('');
-  resultsEl.innerHTML = `<div style="font-size:11.5px; color:var(--muted); margin-bottom:8px;">הצעת חלוקה (אפשר לעגל/לשנות ידנית לפי מה שנוח):</div>${rows}`;
 }
 
 function render(){
