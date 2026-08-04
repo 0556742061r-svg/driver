@@ -565,8 +565,29 @@ function detachFirestoreListeners(){
   fbUnsubscribers = [];
 }
 
-function attachFirestoreListeners(){
+async function attachFirestoreListeners(){
   detachFirestoreListeners();
+
+  // Resolve entries + workday start together first, synchronously, to avoid a race
+  // where the workday listener fires before entries have loaded and wrongly resets the clock.
+  try{
+    const [entriesDoc, workdayDoc] = await Promise.all([
+      fbDocRef(STORAGE_KEY).get(),
+      fbDocRef(WORKDAY_KEY).get()
+    ]);
+    const ed = entriesDoc.data();
+    entries = (ed && ed.value) ? JSON.parse(ed.value) : [];
+    const wd = workdayDoc.data();
+    const wsArr = (wd && wd.value) ? JSON.parse(wd.value) : [];
+    if(wsArr && wsArr.length){
+      workdayStart = wsArr[0];
+    } else {
+      workdayStart = entries.length ? 0 : Date.now();
+      saveWorkdayStart();
+    }
+    render();
+  }catch(e){ console.error('initial sync failed', e); }
+
   fbUnsubscribers.push(fbDocRef(STORAGE_KEY).onSnapshot(doc=>{
     const d = doc.data();
     entries = (d && d.value) ? JSON.parse(d.value) : [];
@@ -587,11 +608,8 @@ function attachFirestoreListeners(){
     const arr = (d && d.value) ? JSON.parse(d.value) : [];
     if(arr && arr.length){
       workdayStart = arr[0];
-    } else if(workdayStart === null){
-      workdayStart = entries.length ? 0 : Date.now();
-      saveWorkdayStart();
+      render();
     }
-    render();
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAY_HISTORY_KEY).onSnapshot(doc=>{
     const d = doc.data();
