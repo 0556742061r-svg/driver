@@ -386,6 +386,7 @@ let workdayHistory = [];
 let viewingWorkdayId = null;
 let dailyGoal = null;
 let goalConfettiShownFor = null;
+let notifiedTaskAlerts = new Set(); // tracks which task alerts already fired, e.g. 'taskId-soon' / 'taskId-over'
 let debts = [];
 let debtPayments = [];
 let currentScreen = 'main'; // 'main' | 'debts'
@@ -831,20 +832,43 @@ function togglePaid(id){
     save(); render();
   }
 }
+let amountEditCommissionPct = 0;
+
 function openAmountEdit(id){
   editTargetId = id;
   document.getElementById('overlay').classList.add('open');
   const e = entries.find(x=>x.id===id);
   if(!e) return;
+  amountEditCommissionPct = e.commissionPct || 0;
+  renderAmountEditSheet();
+}
+function renderAmountEditSheet(){
+  const e = entries.find(x=>x.id===editTargetId);
+  if(!e) return;
+  const amountInputEl = document.getElementById('amountEditInput');
+  const currentVal = amountInputEl ? amountInputEl.value : e.amount;
+  const showCommission = !isExpenseKind(e.kind) && e.kind !== 'install';
   const sheet = document.getElementById('sheet');
   sheet.innerHTML = `
-    <h2>${CATS[e.kind].ic} עריכת סכום</h2>
-    <input id="amountEditInput" class="goalinput" type="number" inputmode="decimal" value="${e.amount}">
-    <div class="saverow">
+    <h2>${CATS[e.kind].ic} עריכת סכום${showCommission ? ' ועמלה' : ''}</h2>
+    <input id="amountEditInput" class="goalinput" type="number" inputmode="decimal" value="${currentVal}">
+    ${showCommission ? `
+      <div class="commlabel" style="margin-top:6px;">אחוז עמלה שנלקח</div>
+      <div class="commquick">
+        <div class="qchip ${amountEditCommissionPct===0?'on':''}" onclick="setAmountEditCommission(0)">אין ניכוי</div>
+        <div class="qchip ${amountEditCommissionPct===12?'on':''}" onclick="setAmountEditCommission(12)">12%</div>
+        <input class="comminput" type="number" min="0" max="100" inputmode="decimal" placeholder="אחר %" value="${(amountEditCommissionPct!==0 && amountEditCommissionPct!==12) ? amountEditCommissionPct : ''}" oninput="amountEditCommissionPct = parseFloat(this.value)||0; document.querySelectorAll('.qchip').forEach(el=>el.classList.remove('on'));">
+      </div>
+    ` : ''}
+    <div class="saverow" style="margin-top:14px;">
       <button class="savebtn single" onclick="submitAmountEdit()">💾 שמירה</button>
     </div>
     <div class="cancel" onclick="closeSheet()">ביטול</div>
   `;
+}
+function setAmountEditCommission(pct){
+  amountEditCommissionPct = pct;
+  renderAmountEditSheet();
 }
 function submitAmountEdit(){
   const e = entries.find(x=>x.id===editTargetId);
@@ -852,6 +876,9 @@ function submitAmountEdit(){
   const val = parseFloat(document.getElementById('amountEditInput').value || '0');
   if(!val || val<=0) return;
   e.amount = val;
+  if(!isExpenseKind(e.kind) && e.kind !== 'install'){
+    e.commissionPct = amountEditCommissionPct || 0;
+  }
   save();
   closeSheet();
   render();
@@ -875,7 +902,14 @@ function renderDebtorSheet(){
     <div class="deadlinerow" style="margin-bottom:8px;">
       <input id="debtorPhone" class="contactinput" style="width:100%;" type="tel" placeholder="טלפון (לא חובה)" value="${e.phone||''}">
     </div>
-    <div class="contacttoggle" onclick="pickContactInto('debtorName','debtorPhone')">📇 ייבוא מאנשי קשר</div>
+    <div class="expenserow" style="margin:0 0 10px;">
+      <div class="contacttoggle" style="flex:1;" onclick="pickContactInto('debtorName','debtorPhone')">📇 אנשי קשר</div>
+      <div class="contacttoggle" style="flex:1;" onclick="openWhatsAppApp()">📱 WhatsApp</div>
+    </div>
+    ${e.status==='unpaid' ? `
+      <div style="font-size:11.5px; color:var(--muted); margin:2px 0 6px; text-align:center;">⏰ תזכורת לגבייה (לא חובה)</div>
+      <input id="collectReminderInput" class="contactinput" style="width:100%; margin-bottom:10px;" type="datetime-local">
+    ` : ''}
     <div class="saverow">
       <button class="savebtn single" onclick="submitDebtorEdit()">💾 שמירה</button>
     </div>
@@ -895,9 +929,26 @@ function submitDebtorEdit(skip){
     e.phone = (document.getElementById('debtorPhone').value || '').trim();
   }
   if(editTargetMode==='statusChange' && e.status !== 'cancelled') e.status = 'unpaid';
+  const reminderEl = document.getElementById('collectReminderInput');
+  if(reminderEl && reminderEl.value){
+    const ts = new Date(reminderEl.value).getTime();
+    if(!isNaN(ts)){
+      const nameTag = (e.name || '').trim();
+      tasks.push({
+        id: 'task'+Date.now()+Math.random().toString(36).slice(2,7),
+        title: `💸 לגבות${nameTag ? ' מ-'+nameTag : ''} · ${fmt(e.amount)}`,
+        deadline: ts,
+        done:false
+      });
+      saveTasks();
+    }
+  }
   save();
   closeSheet();
   render();
+}
+function openWhatsAppApp(){
+  window.location.href = 'whatsapp://';
 }
 async function pickContactInto(nameFieldId, phoneFieldId){
   if(!(navigator.contacts && navigator.contacts.select)){
@@ -992,51 +1043,59 @@ let fabStartTime = 0;
 function fabStart(e){
   if(e && e.preventDefault) e.preventDefault();
   if(fabRecording) return;
-  navigator.mediaDevices.getUserMedia({ audio:true }).then(stream=>{
-    fabRecording = true;
-    recordedChunks = [];
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = ev=>{ if(ev.data && ev.data.size>0) recordedChunks.push(ev.data); };
-    mediaRecorder.onstop = ()=>{
-      stream.getTracks().forEach(t=>t.stop());
-      clearInterval(recordingTimerHandle);
-      const toast = document.getElementById('recToast');
-      const fabEl = document.getElementById('fabRec');
-      if(toast) toast.style.display = 'none';
-      if(fabEl) fabEl.classList.remove('recording');
-      const elapsed = Math.max(1, Math.round((Date.now() - fabStartTime) / 1000));
-      fabRecording = false;
-      if(elapsed < 1 || recordedChunks.length === 0) return; // too short / accidental touch — discard silently
-      const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
-      const reader = new FileReader();
-      reader.onload = function(){
-        voiceNotes.push({
-          id: 'v'+Date.now()+Math.random().toString(36).slice(2,7),
-          ts: Date.now(),
-          durationSec: elapsed,
-          tag: '',
-          mime: blob.type,
-          base64: reader.result,
-          reviewed:false
-        });
-        saveVoiceNotes();
-        render();
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    alert('הדפדפן הזה לא תומך בהקלטת קול, או שהאתר לא נטען דרך חיבור מאובטח (https). נסה לפתוח את הקישור ישירות ב-Chrome או Safari הרגילים, לא מתוך אפליקציה אחרת (וואטסאפ וכו׳).');
+    return;
+  }
+  try{
+    navigator.mediaDevices.getUserMedia({ audio:true }).then(stream=>{
+      fabRecording = true;
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = ev=>{ if(ev.data && ev.data.size>0) recordedChunks.push(ev.data); };
+      mediaRecorder.onstop = ()=>{
+        stream.getTracks().forEach(t=>t.stop());
+        clearInterval(recordingTimerHandle);
+        const toast = document.getElementById('recToast');
+        const fabEl = document.getElementById('fabRec');
+        if(toast) toast.style.display = 'none';
+        if(fabEl) fabEl.classList.remove('recording');
+        const elapsed = Math.max(1, Math.round((Date.now() - fabStartTime) / 1000));
+        fabRecording = false;
+        if(elapsed < 1 || recordedChunks.length === 0) return; // too short / accidental touch — discard silently
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = function(){
+          voiceNotes.push({
+            id: 'v'+Date.now()+Math.random().toString(36).slice(2,7),
+            ts: Date.now(),
+            durationSec: elapsed,
+            tag: '',
+            mime: blob.type,
+            base64: reader.result,
+            reviewed:false
+          });
+          saveVoiceNotes();
+          render();
+        };
+        reader.readAsDataURL(blob);
       };
-      reader.readAsDataURL(blob);
-    };
-    mediaRecorder.start();
-    fabStartTime = Date.now();
-    const fabEl = document.getElementById('fabRec');
-    const toast = document.getElementById('recToast');
-    if(fabEl) fabEl.classList.add('recording');
-    if(toast){ toast.style.display = 'flex'; toast.textContent = '🔴 00:00'; }
-    recordingTimerHandle = setInterval(()=>{
-      const sec = Math.round((Date.now() - fabStartTime) / 1000);
-      if(toast) toast.textContent = '🔴 ' + durFmt(sec);
-    }, 300);
-  }).catch(()=>{
-    alert('לא הצלחתי לגשת למיקרופון. ייתכן שהקובץ נפתח ישירות מההורדות (לא דרך אתר מאובטח), או שהרשאת המיקרופון לא אושרה.');
-  });
+      mediaRecorder.start();
+      fabStartTime = Date.now();
+      const fabEl = document.getElementById('fabRec');
+      const toast = document.getElementById('recToast');
+      if(fabEl) fabEl.classList.add('recording');
+      if(toast){ toast.style.display = 'flex'; toast.textContent = '🔴 00:00'; }
+      recordingTimerHandle = setInterval(()=>{
+        const sec = Math.round((Date.now() - fabStartTime) / 1000);
+        if(toast) toast.textContent = '🔴 ' + durFmt(sec);
+      }, 300);
+    }).catch(err=>{
+      alert('לא הצלחתי לגשת למיקרופון. סיבה: ' + (err && err.message ? err.message : err) + '\n\nייתכן שההרשאה נדחתה, או שהמיקרופון תפוס באפליקציה אחרת.');
+    });
+  }catch(err){
+    alert('שגיאה בפתיחת ההקלטה: ' + (err && err.message ? err.message : err));
+  }
 }
 function fabStop(){
   if(!fabRecording) return;
@@ -1204,6 +1263,49 @@ function durFmt(s){
   const mm = String(Math.floor(s/60)).padStart(2,'0');
   const ss = String(s%60).padStart(2,'0');
   return mm+':'+ss;
+}
+
+function requestNotifyPermission(){
+  if(typeof Notification === 'undefined'){
+    alert('הדפדפן הזה לא תומך בהתראות מערכת.');
+    return;
+  }
+  Notification.requestPermission().then(perm=>{
+    if(perm==='granted'){
+      new Notification('התראות הופעלו ✅', { body: 'תקבל התראה כשמשלוח מתקרב לזמן היעד או עובר אותו.' });
+    }
+    render();
+  });
+}
+
+function checkTaskAlerts(){
+  if(typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const now = Date.now();
+  tasks.filter(t=>!t.done).forEach(t=>{
+    const minsLeft = Math.round((t.deadline - now) / 60000);
+    const hourKey = t.id+'-hour', soonKey = t.id+'-soon', overKey = t.id+'-over';
+    if(minsLeft <= 60 && minsLeft > 10 && !notifiedTaskAlerts.has(hourKey)){
+      notifiedTaskAlerts.add(hourKey);
+      try{
+        new Notification('⏰ שעה לפני זמן היעד', { body: `${t.title} - עוד כשעה` });
+        if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      }catch(e){}
+    }
+    if(minsLeft <= 10 && minsLeft > 0 && !notifiedTaskAlerts.has(soonKey)){
+      notifiedTaskAlerts.add(soonKey);
+      try{
+        new Notification('⏰ מתקרב זמן היעד', { body: `${t.title} - עוד ${minsLeft} דקות` });
+        if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      }catch(e){}
+    }
+    if(minsLeft <= 0 && !notifiedTaskAlerts.has(overKey)){
+      notifiedTaskAlerts.add(overKey);
+      try{
+        new Notification('🚨 עבר זמן היעד!', { body: t.title, requireInteraction:true });
+        if(navigator.vibrate) navigator.vibrate([300,100,300,100,300]);
+      }catch(e){}
+    }
+  });
 }
 
 function renderVoiceSection(){
@@ -1536,6 +1638,9 @@ function render(){
 
     ${renderTasksSection()}
     <button class="taskbtn" onclick="openTaskModal()"><span>⏰</span><span>הוספת תזכורת עם שעה</span></button>
+    ${(typeof Notification!=='undefined' && Notification.permission==='default' && tasks.some(t=>!t.done)) ? `
+    <button class="taskbtn" onclick="requestNotifyPermission()" style="border-color:var(--accent); color:var(--accent);"><span>🔔</span><span>הפעלת התראות לתזכורות</span></button>
+    ` : ''}
     ${renderVoiceSection()}
 
     <div class="meter">
@@ -1735,7 +1840,10 @@ function renderSheet(){
       <div class="display"><div class="val mono">₪${amountVal}</div></div>
       <input id="draftName" class="contactinput" style="width:100%; margin-bottom:8px;" type="text" placeholder="שם הלקוח (לא חובה)" value="${draft.name||''}" oninput="draft.name=this.value">
       <input id="draftPhone" class="contactinput" style="width:100%; margin-bottom:8px;" type="tel" placeholder="טלפון (לא חובה)" value="${draft.phone||''}" oninput="draft.phone=this.value">
-      <div class="contacttoggle" onclick="pickContactInto('draftName','draftPhone')">📇 ייבוא מאנשי קשר</div>
+      <div class="expenserow" style="margin:0;">
+          <div class="contacttoggle" style="flex:1;" onclick="pickContactInto('draftName','draftPhone')">📇 אנשי קשר</div>
+          <div class="contacttoggle" style="flex:1;" onclick="openWhatsAppApp()">📱 WhatsApp</div>
+        </div>
       <div class="saverow">
         <button class="savebtn single" onclick="commitDraft('unpaid')">💾 שמירה</button>
       </div>
@@ -1762,7 +1870,10 @@ function renderSheet(){
           <input id="draftName" class="contactinput" type="text" placeholder="שם הלקוח" value="${draft.name||''}" oninput="draft.name=this.value">
           <input id="draftPhone" class="contactinput" type="tel" placeholder="טלפון" value="${draft.phone||''}" oninput="draft.phone=this.value">
         </div>
-        <div class="contacttoggle" onclick="pickContactInto('draftName','draftPhone')">📇 ייבוא מאנשי קשר</div>
+        <div class="expenserow" style="margin:0;">
+          <div class="contacttoggle" style="flex:1;" onclick="pickContactInto('draftName','draftPhone')">📇 אנשי קשר</div>
+          <div class="contacttoggle" style="flex:1;" onclick="openWhatsAppApp()">📱 WhatsApp</div>
+        </div>
       `}
       <div class="commlabel" style="margin-top:14px;">סוג המשלוח / נסיעה</div>
       <div class="commquick">
@@ -1800,6 +1911,11 @@ setInterval(()=>{
   const anyAudioPlaying = Array.from(document.querySelectorAll('audio')).some(a=>!a.paused);
   if(!overlayOpen && !anyAudioPlaying && !fabRecording) render();
 }, 60000);
+
+setInterval(()=>{
+  if(firebaseReady && !currentUid) return;
+  checkTaskAlerts();
+}, 20000);
 </script>
 </body>
 </html>
