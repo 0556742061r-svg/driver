@@ -360,6 +360,72 @@
   }
   .logoutlink:active{opacity:1;}
   .useremail{text-align:center; font-size:11px; color:var(--muted); margin-top:2px;}
+
+  /* ---- Debts & recurring charges screen ---- */
+  .dsection{margin:26px 18px 10px; display:flex; align-items:center; justify-content:space-between;}
+  .dsection h3{margin:0; font-size:13.5px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:7px;}
+  .dsection .dcount{font-size:11px; color:var(--muted); font-family:'Roboto Mono',monospace; background:var(--surface); padding:3px 9px; border-radius:20px; border:1px solid #2f333a;}
+
+  .targetcard{
+    margin:10px 18px 0; padding:18px 20px; border-radius:18px; position:relative; overflow:hidden;
+    background:linear-gradient(145deg,#20241a,#1b1d22); border:1px solid #3a3d2c;
+  }
+  .targetcard::before{content:"";position:absolute; inset:0; background:radial-gradient(circle at 100% 0%, rgba(63,178,127,.10), transparent 60%); pointer-events:none;}
+  .targetlabel{font-size:11px; color:var(--muted); letter-spacing:.5px; display:flex; align-items:center; gap:6px;}
+  .targetamt{font-family:'Roboto Mono',monospace; font-size:32px; font-weight:700; color:var(--paid); margin-top:6px; direction:ltr; text-align:right;}
+  .targetamt span{font-size:16px; opacity:.75; margin-right:4px;}
+  .targetsub{margin-top:8px; font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:5px 14px;}
+  .targetsub b{color:var(--text); font-family:'Roboto Mono',monospace;}
+  .targetbreak{margin-top:12px; padding-top:12px; border-top:1px solid #33372a; display:flex; flex-direction:column; gap:6px;}
+  .targetbreakrow{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--muted);}
+  .targetbreakrow b{color:var(--text); font-family:'Roboto Mono',monospace; font-weight:600;}
+
+  .dcard{
+    position:relative; margin-bottom:10px; padding:15px 16px; border-radius:16px; background:var(--surface);
+    border:1px solid #2f333a; overflow:hidden;
+  }
+  .dcard.dueflag{border-color:#5a3a26;}
+  .dcard.done{opacity:.6;}
+  .dcardtop{display:flex; align-items:center; gap:12px;}
+  .davatar{
+    width:40px; height:40px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:700; background:var(--surface2); color:var(--accent); font-family:'Heebo',sans-serif;
+  }
+  .davatar.done{background:var(--paid-dim); color:var(--paid);}
+  .dcardhead{flex:1; min-width:0;}
+  .dname{font-size:14.5px; font-weight:700; display:flex; align-items:center; gap:6px;}
+  .dsub{font-size:11.5px; color:var(--muted); margin-top:2px; font-family:'Roboto Mono',monospace;}
+  .dpct{font-family:'Roboto Mono',monospace; font-size:13px; font-weight:700; color:var(--accent); flex-shrink:0;}
+  .dpct.done{color:var(--paid);}
+  .dbar{width:100%; height:9px; border-radius:8px; background:var(--surface2); overflow:hidden; margin-top:12px;}
+  .dbarfill{height:100%; border-radius:8px; background:linear-gradient(90deg,#d99a00,var(--accent)); transition:width .5s ease;}
+  .dbarfill.done{background:linear-gradient(90deg,var(--paid),#6fe3ab);}
+  .dchips{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px;}
+  .dchip{
+    font-size:11px; padding:5px 10px; border-radius:20px; background:var(--surface2); color:var(--muted);
+    display:flex; align-items:center; gap:5px; font-weight:500;
+  }
+  .dchip.due{background:var(--accent-dim); color:var(--accent);}
+  .dchip.overdue{background:var(--unpaid-dim); color:var(--unpaid); font-weight:700;}
+  .dnote{
+    margin-top:10px; padding:9px 11px; border-radius:11px; background:var(--surface2); font-size:12px;
+    color:var(--muted); line-height:1.5; display:flex; gap:7px; align-items:flex-start;
+  }
+  .dnote .ic{flex-shrink:0; margin-top:1px;}
+  .dactions{display:flex; gap:8px; margin-top:12px;}
+  .dactions .fuelbtn{padding:10px; font-size:12.5px;}
+  .addcard{
+    margin-bottom:10px; padding:16px; border-radius:16px; border:1.5px dashed #3a3e44; background:transparent;
+    color:var(--muted); text-align:center; font-size:13px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .addcard:active{background:var(--surface); color:var(--text);}
+  .noteinput{
+    width:100%; padding:12px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Heebo',sans-serif; font-size:13px; margin-bottom:10px; direction:rtl;
+    resize:none; min-height:52px; line-height:1.5;
+  }
+  .fieldlabel{font-size:11.5px; color:var(--muted); margin:2px 0 6px;}
 </style>
 </head>
 <body>
@@ -378,6 +444,7 @@ const WORKDAY_HISTORY_KEY = 'workdayhistory_v1';
 const GOAL_KEY = 'dailygoal_v1';
 const DEBTS_KEY = 'debts_v1';
 const DEBT_PAYMENTS_KEY = 'debtpayments_v1';
+const RECURRING_KEY = 'recurring_v1';
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
 const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
@@ -391,6 +458,7 @@ let goalConfettiShownFor = null;
 let notifiedTaskAlerts = new Set(); // tracks which task alerts already fired, e.g. 'taskId-soon' / 'taskId-over'
 let debts = [];
 let debtPayments = [];
+let recurringCharges = [];
 let currentScreen = 'main'; // 'main' | 'debts'
 let debtEditTargetId = null;
 let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
@@ -681,6 +749,12 @@ async function attachFirestoreListeners(){
     debtPayments = (d && d.value) ? JSON.parse(d.value) : [];
     render();
   }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(RECURRING_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    recurringCharges = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+    checkMonthlyRecurringReminders();
+  }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
     const d = doc.data();
     const arr = (d && d.value) ? JSON.parse(d.value) : [];
@@ -703,14 +777,18 @@ async function checkAndOfferLocalImport(){
     if(localEntries && localEntries.length > 0){
       const ok = confirm(`נמצאו ${localEntries.length} רשומות שמורות במכשיר הזה (מלפני ההתחברות). לייבא אותן לחשבון שלך?`);
       if(!ok) return;
-      const [localTasks, localVoice, localWD, localWH] = await Promise.all([
-        storageGet(TASKS_KEY), storageGet(VOICE_KEY), storageGet(WORKDAY_KEY), storageGet(WORKDAY_HISTORY_KEY)
+      const [localTasks, localVoice, localWD, localWH, localDebts, localDebtPayments, localRecurring] = await Promise.all([
+        storageGet(TASKS_KEY), storageGet(VOICE_KEY), storageGet(WORKDAY_KEY), storageGet(WORKDAY_HISTORY_KEY),
+        storageGet(DEBTS_KEY), storageGet(DEBT_PAYMENTS_KEY), storageGet(RECURRING_KEY)
       ]);
       await storageSet(STORAGE_KEY, localEntries);
       if(localTasks && localTasks.length) await storageSet(TASKS_KEY, localTasks);
       if(localVoice && localVoice.length) await storageSet(VOICE_KEY, localVoice);
       if(localWD && localWD.length) await storageSet(WORKDAY_KEY, localWD);
       if(localWH && localWH.length) await storageSet(WORKDAY_HISTORY_KEY, localWH);
+      if(localDebts && localDebts.length) await storageSet(DEBTS_KEY, localDebts);
+      if(localDebtPayments && localDebtPayments.length) await storageSet(DEBT_PAYMENTS_KEY, localDebtPayments);
+      if(localRecurring && localRecurring.length) await storageSet(RECURRING_KEY, localRecurring);
       alert('הנתונים יובאו בהצלחה! ✅');
     }
   }catch(e){ console.error('import check failed', e); }
@@ -732,11 +810,13 @@ async function load(){
   dailyGoal = (goalArr && goalArr.length) ? goalArr[0] : null;
   debts = await storageGet(DEBTS_KEY);
   debtPayments = await storageGet(DEBT_PAYMENTS_KEY);
+  recurringCharges = await storageGet(RECURRING_KEY);
   const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
   if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
   workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
   render();
   checkMonthlyDebtReminders();
+  checkMonthlyRecurringReminders();
 }
 function save(){ storageSet(STORAGE_KEY, entries); }
 function saveTasks(){ storageSet(TASKS_KEY, tasks); }
@@ -746,6 +826,7 @@ function saveWorkdayHistory(){ storageSet(WORKDAY_HISTORY_KEY, workdayHistory); 
 function saveDailyGoal(){ storageSet(GOAL_KEY, dailyGoal===null ? [] : [dailyGoal]); }
 function saveDebts(){ storageSet(DEBTS_KEY, debts); }
 function saveDebtPayments(){ storageSet(DEBT_PAYMENTS_KEY, debtPayments); }
+function saveRecurring(){ storageSet(RECURRING_KEY, recurringCharges); }
 function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
 function saveWorkExceptions(){ storageSet(WORK_EXCEPTIONS_KEY, workExceptions); }
 
@@ -1525,6 +1606,9 @@ function toggleWorkDay(i){
   renderWorkDaysSettingsSheet();
 }
 
+function escHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
 function debtPaidAmount(debtId){
   return debtPayments.filter(p=>p.debtId===debtId).reduce((s,p)=>s+p.amount, 0);
 }
@@ -1537,17 +1621,29 @@ function totalDebtRemaining(){
 function totalDebtPaidAllTime(){
   return debtPayments.reduce((s,p)=>s+p.amount, 0);
 }
+function debtPaidThisMonthAmount(debtId){
+  const now = new Date();
+  return debtPayments.filter(p=>{
+    if(p.debtId!==debtId) return false;
+    const pd = new Date(p.ts);
+    return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
+  }).reduce((s,p)=>s+p.amount, 0);
+}
+function totalRecurringMonthly(){
+  return recurringCharges.reduce((s,r)=>s+r.amount, 0);
+}
 
 function renderDebtEntryPoint(){
   const remaining = totalDebtRemaining();
-  if(debts.length===0){
+  const recurringTotal = totalRecurringMonthly();
+  if(debts.length===0 && recurringCharges.length===0){
     return `<div class="workdaybar" style="cursor:pointer;" onclick="openDebtsScreen()">
-      <span>💳 ניהול חובות והחזרים</span>
+      <span>💳 חובות והוצאות קבועות</span>
       <span class="wdbtn">פתיחה</span>
     </div>`;
   }
   return `<div class="workdaybar" style="cursor:pointer;" onclick="openDebtsScreen()">
-    <span>💳 סה"כ חוב שנותר: <b style="color:var(--unpaid); font-family:'Roboto Mono',monospace;">${fmt(remaining)}</b></span>
+    <span>💳 חוב: <b style="color:var(--unpaid); font-family:'Roboto Mono',monospace;">${fmt(remaining)}</b>${recurringTotal>0 ? ` · קבוע: <b style="color:var(--muted); font-family:'Roboto Mono',monospace;">${fmt(recurringTotal)}</b>/חודש` : ''}</span>
     <span class="wdbtn">ניהול</span>
   </div>`;
 }
@@ -1568,23 +1664,26 @@ function renderDebtsScreen(){
   const totalPaid = totalDebtPaidAllTime();
   const overallPct = totalOwedOriginal>0 ? Math.min(100, Math.round((totalPaid/totalOwedOriginal)*100)) : 0;
   const sorted = [...debts].sort((a,b)=> debtRemaining(b) - debtRemaining(a));
+  const sortedRecurring = [...recurringCharges].sort((a,b)=> (a.dueDay||99) - (b.dueDay||99));
 
-  // Monthly target: sum of agreed monthly payments across debts still owed
-  const monthlyTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed).reduce((s,d)=>s+d.monthlyAgreed, 0);
+  // Combined daily target: remaining agreed monthly debt payments + full recurring fixed costs
+  const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed).reduce((s,d)=>s+d.monthlyAgreed, 0);
   const now = new Date();
   const paidThisMonth = debtPayments.filter(p=>{
     const pd = new Date(p.ts);
     return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
   }).reduce((s,p)=>s+p.amount, 0);
-  const monthlyLeft = Math.max(0, monthlyTarget - paidThisMonth);
-  const monthlyPct = monthlyTarget>0 ? Math.min(100, Math.round((paidThisMonth/monthlyTarget)*100)) : 0;
+  const debtMonthlyLeft = Math.max(0, monthlyDebtTarget - paidThisMonth);
+  const recurringTotal = totalRecurringMonthly();
+  const combinedLeft = debtMonthlyLeft + recurringTotal;
   const remainingWorkDays = countRemainingWorkDaysInMonth();
-  const perWorkDay = remainingWorkDays>0 ? Math.ceil(monthlyLeft/remainingWorkDays) : 0;
+  const perWorkDay = remainingWorkDays>0 ? Math.ceil(combinedLeft/remainingWorkDays) : 0;
+  const todayDate = now.getDate();
 
   app.innerHTML = `
     <header>
       <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
-      <h1>💳 ניהול חובות</h1>
+      <h1>💳 חובות והוצאות קבועות</h1>
       <div class="date mono"></div>
     </header>
 
@@ -1597,17 +1696,20 @@ function renderDebtsScreen(){
       </div>
     </div>
 
-    ${monthlyTarget>0 ? `
-    <div class="goalcard">
-      <div class="goalhead"><div class="goallabel">יעד להחזרים החודש</div><div class="goalnums">${fmt(paidThisMonth)} <b>/ ${fmt(monthlyTarget)}</b></div></div>
-      <div class="goalbar"><div class="goalbarfill ${monthlyPct>=100?'done':''}" style="width:${monthlyPct}%"></div></div>
-      <div class="goalmsg ${monthlyPct>=100?'done':''}">
-        ${monthlyPct>=100 ? '🎉 השלמת את יעד ההחזרים החודשי!' :
-          (remainingWorkDays>0 ? `נשארו ${remainingWorkDays} ימי עבודה החודש · כדאי לשים בצד בערך <b style="color:var(--accent)">${fmt(perWorkDay)}</b> ליום עבודה` : 'אין עוד ימי עבודה החודש לפי הלוח שהגדרת')}
+    ${combinedLeft>0 ? `
+    <div class="targetcard">
+      <div class="targetlabel">💪 כמה כדאי לשים בצד ליום עבודה</div>
+      <div class="targetamt"><span>₪</span>${perWorkDay.toLocaleString('he-IL')}</div>
+      <div class="targetsub">
+        ${remainingWorkDays>0 ? `<span>נשארו <b>${remainingWorkDays}</b> ימי עבודה החודש</span>` : `<span>אין עוד ימי עבודה החודש לפי הלוח שהגדרת</span>`}
+      </div>
+      <div class="targetbreak">
+        ${debtMonthlyLeft>0 ? `<div class="targetbreakrow"><span>🤝 החזרי חובות שנותרו החודש</span><b>${fmt(debtMonthlyLeft)}</b></div>` : ''}
+        ${recurringTotal>0 ? `<div class="targetbreakrow"><span>📌 הוצאות קבועות</span><b>${fmt(recurringTotal)}</b></div>` : ''}
       </div>
     </div>
-    <div class="wdbtn" style="display:inline-block; margin:0 18px 6px; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>
-    ` : (debts.length>0 ? `<div class="wdbtn" style="display:inline-block; margin:10px 18px 6px; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>` : '')}
+    <div class="wdbtn" style="display:inline-block; margin:8px 18px 0; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>
+    ` : (debts.length>0 || recurringCharges.length>0 ? `<div class="wdbtn" style="display:inline-block; margin:10px 18px 6px; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>` : '')}
 
     ${debts.length>0 ? `
     <div class="goalcard">
@@ -1617,40 +1719,93 @@ function renderDebtsScreen(){
     ${renderDebtChart()}
     ` : ''}
 
-    <div class="actions" style="margin-top:16px;">
-      <button class="actbtn passenger" onclick="openDebtSheet()" style="flex:1;">
-        <span class="ic">➕</span> הוספת בעל חוב
-      </button>
+    <div class="dsection">
+      <h3>🤝 בעלי חוב</h3>
+      ${debts.length>0 ? `<span class="dcount">${debts.length}</span>` : ''}
     </div>
 
-    <div class="listwrap" style="margin-top:14px;">
+    <div class="listwrap" style="margin-top:0;">
       ${sorted.length===0 ? `
-        <div class="empty">
+        <div class="addcard" onclick="openDebtSheet()"><span>➕</span> הוספת בעל חוב</div>
+        <div class="empty" style="padding:20px 20px 6px;">
           <span class="ic">💳</span>
-          עדיין לא הוספת בעלי חוב.<br>לחץ למעלה על "הוספת בעל חוב" כדי להתחיל לעקוב.
-        </div>` : sorted.map(d=>{
+          עדיין לא הוספת בעלי חוב.
+        </div>` : `
+        <div class="addcard" onclick="openDebtSheet()"><span>➕</span> הוספת בעל חוב</div>
+        ${sorted.map(d=>{
           const remaining = debtRemaining(d);
           const paid = debtPaidAmount(d.id);
           const pct = d.totalOwed>0 ? Math.min(100, Math.round((paid/d.totalOwed)*100)) : 0;
           const isDone = remaining<=0;
+          const paidThisMonthForD = debtPaidThisMonthAmount(d.id);
+          const isOverdue = !isDone && d.dueDay && todayDate > d.dueDay && paidThisMonthForD < (d.monthlyAgreed||0);
+          const isPaidThisMonth = !isDone && d.dueDay && d.monthlyAgreed && paidThisMonthForD >= d.monthlyAgreed;
+          const initial = (d.creditorName||'?').trim().charAt(0).toUpperCase();
           return `
-          <div class="task ok" style="margin-bottom:10px;">
-            <div class="taskmid" style="width:100%;">
-              <div class="taskttl">${d.creditorName} ${isDone?'✅':''}</div>
-              <div class="tasktime">נותר ${fmt(remaining)} מתוך ${fmt(d.totalOwed)} · ${pct}%</div>
-              ${(d.monthlyAgreed && !isDone) ? `<div class="tasktime">🤝 הסדר: ${fmt(d.monthlyAgreed)}/חודש · נשאר כ-${Math.ceil(remaining/d.monthlyAgreed)} חודשים</div>` : ''}
-              <div class="goalbar" style="height:8px; margin-top:8px;">
-                <div class="goalbarfill ${isDone?'done':''}" style="width:${pct}%"></div>
+          <div class="dcard ${isOverdue?'dueflag':''} ${isDone?'done':''}">
+            <div class="dcardtop">
+              <div class="davatar ${isDone?'done':''}">${isDone?'✅':initial}</div>
+              <div class="dcardhead">
+                <div class="dname">${escHtml(d.creditorName)}</div>
+                <div class="dsub">נותר ${fmt(remaining)} מתוך ${fmt(d.totalOwed)}</div>
               </div>
+              <div class="dpct ${isDone?'done':''}">${pct}%</div>
+            </div>
+            <div class="dbar"><div class="dbarfill ${isDone?'done':''}" style="width:${pct}%"></div></div>
+            ${(!isDone && (d.monthlyAgreed || d.dueDay)) ? `
+            <div class="dchips">
+              ${d.monthlyAgreed ? `<div class="dchip">🤝 ${fmt(d.monthlyAgreed)}/חודש · כ-${Math.ceil(remaining/d.monthlyAgreed)} חודשים נותרו</div>` : ''}
+              ${d.dueDay ? (isOverdue
+                  ? `<div class="dchip overdue">⚠️ עבר יום ${d.dueDay} - עדיין לא שולם החודש</div>`
+                  : (isPaidThisMonth
+                      ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ שולם החודש</div>`
+                      : `<div class="dchip due">📅 תשלום ביום ${d.dueDay} לחודש</div>`)
+                ) : ''}
+            </div>` : ''}
+            ${d.note ? `<div class="dnote"><span class="ic">📝</span><span>${escHtml(d.note)}</span></div>` : ''}
+            <div class="dactions">
+              ${!isDone ? `<button class="fuelbtn" onclick="openPaymentSheet('${d.id}')">💰 רישום תשלום</button>` : ''}
+              <button class="fuelbtn" onclick="openDebtSheet('${d.id}')">✏️ עריכה</button>
+              <button class="fuelbtn" onclick="deleteDebt('${d.id}')">🗑️</button>
             </div>
           </div>
-          <div class="expenserow" style="margin:-4px 18px 14px;">
-            ${!isDone ? `<button class="fuelbtn" onclick="openPaymentSheet('${d.id}')">💰 רישום תשלום</button>` : ''}
-            <button class="fuelbtn" onclick="openDebtSheet('${d.id}')">✏️ עריכה</button>
-            <button class="fuelbtn" onclick="deleteDebt('${d.id}')">🗑️</button>
-          </div>
         `;
-        }).join('')}
+        }).join('')}`}
+    </div>
+
+    <div class="dsection">
+      <h3>📌 חיובים קבועים</h3>
+      ${recurringCharges.length>0 ? `<span class="dcount">${fmt(recurringTotal)}/חודש</span>` : ''}
+    </div>
+    <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+      הוצאות שחוזרות כל חודש (ביטוח, שכירות רכב, טלפון וכו') - לא חוב, אלא סכום קבוע שכדאי לדעת שצריך להביא.
+    </div>
+
+    <div class="listwrap" style="margin-top:0;">
+      <div class="addcard" onclick="openRecurringSheet()"><span>➕</span> הוספת חיוב קבוע</div>
+      ${sortedRecurring.length===0 ? '' : sortedRecurring.map(r=>{
+        const isPastDue = r.dueDay && todayDate > r.dueDay;
+        return `
+        <div class="dcard">
+          <div class="dcardtop">
+            <div class="davatar">📌</div>
+            <div class="dcardhead">
+              <div class="dname">${escHtml(r.name)}</div>
+              <div class="dsub">${fmt(r.amount)} לחודש</div>
+            </div>
+          </div>
+          ${r.dueDay ? `
+          <div class="dchips">
+            <div class="dchip ${isPastDue?'':'due'}">${isPastDue?'📅':'📅'} יורד ביום ${r.dueDay} לחודש</div>
+          </div>` : ''}
+          ${r.note ? `<div class="dnote"><span class="ic">📝</span><span>${escHtml(r.note)}</span></div>` : ''}
+          <div class="dactions">
+            <button class="fuelbtn" onclick="openRecurringSheet('${r.id}')">✏️ עריכה</button>
+            <button class="fuelbtn" onclick="deleteRecurring('${r.id}')">🗑️</button>
+          </div>
+        </div>
+      `;
+      }).join('')}
     </div>
   `;
 }
@@ -1690,15 +1845,17 @@ function openDebtSheet(id){
   const sheet = document.getElementById('sheet');
   sheet.innerHTML = `
     <h2>💳 ${d ? 'עריכת בעל חוב' : 'הוספת בעל חוב'}</h2>
-    <input id="debtName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם בעל החוב" value="${d ? d.creditorName : ''}">
+    <input id="debtName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם בעל החוב" value="${d ? escHtml(d.creditorName) : ''}">
     <input id="debtTotal" class="goalinput" type="number" inputmode="decimal" placeholder="סכום החוב הכולל" value="${d ? d.totalOwed : ''}">
     <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:2px 0 10px;">מה סיכמת מול בעל החוב? (לא חובה - רק אם כבר יש הסדר)</div>
     <input id="debtMonthly" class="contactinput" style="width:100%; margin-bottom:10px;" type="number" inputmode="decimal" placeholder="תשלום חודשי מוסכם (לא חובה)" value="${d && d.monthlyAgreed ? d.monthlyAgreed : ''}">
     <div class="deadlinerow">
       <input id="debtDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="באיזה יום בחודש? (למשל 5)" value="${d && d.dueDay ? d.dueDay : ''}">
     </div>
-    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 0;">אם ממלאים - נזכיר לך יום לפני ובאותו יום</div>
-    <div class="saverow" style="margin-top:14px;">
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">אם ממלאים - נזכיר לך יום לפני ובאותו יום, וגם יופיע ישירות על הכרטיס</div>
+    <div class="fieldlabel">הערה (לא חובה - כדי שתדע למה קבעת ככה בלי לפתוח שוב)</div>
+    <textarea id="debtNote" class="noteinput" placeholder="למשל: סיכמנו שאני משלם ב-5 לחודש כי אז מגיע לי המשכורת">${d && d.note ? escHtml(d.note) : ''}</textarea>
+    <div class="saverow" style="margin-top:4px;">
       <button class="savebtn single" onclick="submitDebt()">💾 שמירה</button>
     </div>
     <div class="cancel" onclick="closeSheet()">ביטול</div>
@@ -1711,12 +1868,13 @@ function submitDebt(){
   const monthlyAgreed = monthlyVal>0 ? monthlyVal : null;
   const dueDayVal = parseInt(document.getElementById('debtDueDay').value || '0', 10);
   const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
+  const note = (document.getElementById('debtNote').value || '').trim();
   if(!name || !total || total<=0) return;
   if(debtEditTargetId){
     const d = debts.find(x=>x.id===debtEditTargetId);
-    if(d){ d.creditorName = name; d.totalOwed = total; d.monthlyAgreed = monthlyAgreed; d.dueDay = dueDay; }
+    if(d){ d.creditorName = name; d.totalOwed = total; d.monthlyAgreed = monthlyAgreed; d.dueDay = dueDay; d.note = note; }
   } else {
-    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, monthlyAgreed, dueDay, createdTs:Date.now() });
+    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, monthlyAgreed, dueDay, note, createdTs:Date.now() });
   }
   saveDebts();
   debtEditTargetId = null;
@@ -1750,6 +1908,73 @@ function deleteDebt(id){
   saveDebts();
   saveDebtPayments();
   render();
+}
+
+let recurringEditTargetId = null;
+function openRecurringSheet(id){
+  recurringEditTargetId = id || null;
+  const r = id ? recurringCharges.find(x=>x.id===id) : null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>📌 ${r ? 'עריכת חיוב קבוע' : 'הוספת חיוב קבוע'}</h2>
+    <input id="recName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם ההוצאה (למשל: ביטוח רכב, שכירות)" value="${r ? escHtml(r.name) : ''}">
+    <input id="recAmount" class="goalinput" type="number" inputmode="decimal" placeholder="סכום חודשי" value="${r ? r.amount : ''}">
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:2px 0 10px;">באיזה יום בחודש יורד החיוב? (לא חובה)</div>
+    <div class="deadlinerow">
+      <input id="recDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="למשל 1" value="${r && r.dueDay ? r.dueDay : ''}">
+    </div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">אם ממלאים - נזכיר לך יום לפני ובאותו יום</div>
+    <div class="fieldlabel">הערה (לא חובה)</div>
+    <textarea id="recNote" class="noteinput" placeholder="למשל: ביטוח חובה + מקיף לרכב">${r && r.note ? escHtml(r.note) : ''}</textarea>
+    <div class="saverow" style="margin-top:4px;">
+      <button class="savebtn single" onclick="submitRecurring()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitRecurring(){
+  const name = (document.getElementById('recName').value || '').trim();
+  const amount = parseFloat(document.getElementById('recAmount').value || '0');
+  const dueDayVal = parseInt(document.getElementById('recDueDay').value || '0', 10);
+  const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
+  const note = (document.getElementById('recNote').value || '').trim();
+  if(!name || !amount || amount<=0) return;
+  if(recurringEditTargetId){
+    const r = recurringCharges.find(x=>x.id===recurringEditTargetId);
+    if(r){ r.name = name; r.amount = amount; r.dueDay = dueDay; r.note = note; }
+  } else {
+    recurringCharges.push({ id:'rec'+Date.now()+Math.random().toString(36).slice(2,7), name, amount, dueDay, note, createdTs:Date.now() });
+  }
+  saveRecurring();
+  recurringEditTargetId = null;
+  closeSheet();
+  render();
+  checkMonthlyRecurringReminders();
+}
+function deleteRecurring(id){
+  if(!confirm('למחוק את החיוב הקבוע הזה?')) return;
+  recurringCharges = recurringCharges.filter(x=>x.id!==id);
+  saveRecurring();
+  render();
+}
+function checkMonthlyRecurringReminders(){
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${now.getMonth()+1}`;
+  recurringCharges.forEach(r=>{
+    if(!r.dueDay) return;
+    const dueDate = new Date(now.getFullYear(), now.getMonth(), r.dueDay, 9, 0, 0);
+    const dayBeforeId = `recdue-${r.id}-${ym}-before`;
+    const onDayId = `recdue-${r.id}-${ym}-day`;
+    const dayBefore = new Date(dueDate.getTime() - 24*60*60*1000);
+    if(!tasks.find(t=>t.id===dayBeforeId)){
+      tasks.push({ id:dayBeforeId, title:`📌 מחר חיוב: ${r.name} · ${fmt(r.amount)}`, deadline:dayBefore.getTime(), done:false });
+    }
+    if(!tasks.find(t=>t.id===onDayId)){
+      tasks.push({ id:onDayId, title:`📌 היום חיוב: ${r.name} · ${fmt(r.amount)}`, deadline:dueDate.getTime(), done:false });
+    }
+  });
+  saveTasks();
 }
 function openPaymentSheet(debtId){
   debtEditTargetId = debtId;
