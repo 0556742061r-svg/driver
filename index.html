@@ -378,6 +378,8 @@ const WORKDAY_HISTORY_KEY = 'workdayhistory_v1';
 const GOAL_KEY = 'dailygoal_v1';
 const DEBTS_KEY = 'debts_v1';
 const DEBT_PAYMENTS_KEY = 'debtpayments_v1';
+const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
+const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
 let tasks = [];
 let voiceNotes = [];
@@ -391,6 +393,9 @@ let debts = [];
 let debtPayments = [];
 let currentScreen = 'main'; // 'main' | 'debts'
 let debtEditTargetId = null;
+let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
+let workExceptions = []; // [{date:'YYYY-MM-DD', working:false}] overrides the weekly pattern for a specific date
+let debtRemindersChecked = false;
 let period = 'today';
 let draft = null; // {kind:'passenger'|'delivery'|'install'|'fuel', digits:'', commissionPct:number}
 let editTargetId = null; // set when adding debtor info to an already-saved entry
@@ -669,10 +674,22 @@ async function attachFirestoreListeners(){
     const d = doc.data();
     debts = (d && d.value) ? JSON.parse(d.value) : [];
     render();
+    checkMonthlyDebtReminders();
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(DEBT_PAYMENTS_KEY).onSnapshot(doc=>{
     const d = doc.data();
     debtPayments = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    const arr = (d && d.value) ? JSON.parse(d.value) : [];
+    if(arr && arr.length===7) workDaysPattern = arr;
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(WORK_EXCEPTIONS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    workExceptions = (d && d.value) ? JSON.parse(d.value) : [];
     render();
   }, err=>console.error(err)));
 }
@@ -715,7 +732,11 @@ async function load(){
   dailyGoal = (goalArr && goalArr.length) ? goalArr[0] : null;
   debts = await storageGet(DEBTS_KEY);
   debtPayments = await storageGet(DEBT_PAYMENTS_KEY);
+  const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
+  if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
+  workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
   render();
+  checkMonthlyDebtReminders();
 }
 function save(){ storageSet(STORAGE_KEY, entries); }
 function saveTasks(){ storageSet(TASKS_KEY, tasks); }
@@ -725,6 +746,8 @@ function saveWorkdayHistory(){ storageSet(WORKDAY_HISTORY_KEY, workdayHistory); 
 function saveDailyGoal(){ storageSet(GOAL_KEY, dailyGoal===null ? [] : [dailyGoal]); }
 function saveDebts(){ storageSet(DEBTS_KEY, debts); }
 function saveDebtPayments(){ storageSet(DEBT_PAYMENTS_KEY, debtPayments); }
+function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
+function saveWorkExceptions(){ storageSet(WORK_EXCEPTIONS_KEY, workExceptions); }
 
 // ---- Auth screens & actions ----
 let authMode = 'login';
@@ -1403,6 +1426,105 @@ function removeVoiceNote(id){
 }
 
 // ---- Debt management ----
+const WEEKDAY_LABELS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+
+function dateKey(d){
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function isWorkingOn(d){
+  const key = dateKey(d);
+  const exc = workExceptions.find(x=>x.date===key);
+  if(exc) return exc.working;
+  return workDaysPattern[d.getDay()];
+}
+function countRemainingWorkDaysInMonth(){
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth();
+  const lastDay = new Date(year, month+1, 0).getDate();
+  let count = 0;
+  for(let day = now.getDate(); day <= lastDay; day++){
+    if(isWorkingOn(new Date(year, month, day))) count++;
+  }
+  return count;
+}
+
+function openWorkDaysSettings(){
+  document.getElementById('overlay').classList.add('open');
+  renderWorkDaysSettingsSheet();
+}
+function renderWorkDaysSettingsSheet(){
+  const sheet = document.getElementById('sheet');
+  const upcomingExceptions = [...workExceptions].filter(x=> new Date(x.date+'T23:59') >= new Date(new Date().toDateString())).sort((a,b)=>a.date.localeCompare(b.date));
+  sheet.innerHTML = `
+    <h2>⚙️ ימי עבודה</h2>
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin-bottom:10px;">
+      התבנית הקבועה שלך בשבוע:
+    </div>
+    <div class="commquick" style="flex-wrap:wrap;">
+      ${WEEKDAY_LABELS.map((label,i)=>`
+        <div class="qchip ${workDaysPattern[i]?'on':''}" style="flex:0 0 30%; margin-bottom:8px;" onclick="toggleWorkDay(${i})">${label}</div>
+      `).join('')}
+    </div>
+
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:14px 0 8px;">
+      יש יום ספציפי שהוא חריג? (למשל "השישי הזה לא עובד")
+    </div>
+    <div class="deadlinerow" style="margin-bottom:8px;">
+      <input id="exceptionDate" class="contactinput" style="width:100%;" type="date">
+    </div>
+    <div class="commquick">
+      <div class="qchip" id="excWorkingChip" onclick="setExceptionWorking(true)">כן עובד</div>
+      <div class="qchip on" id="excOffChip" onclick="setExceptionWorking(false)">לא עובד</div>
+    </div>
+    <div class="saverow" style="margin-top:10px;">
+      <button class="savebtn single" onclick="submitWorkException()">💾 שמירת חריג</button>
+    </div>
+
+    ${upcomingExceptions.length>0 ? `
+      <div style="font-size:11.5px; color:var(--muted); margin:16px 0 8px;">חריגים קרובים:</div>
+      ${upcomingExceptions.map(x=>`
+        <div class="task ok" style="margin-bottom:8px;">
+          <div class="taskmid">
+            <div class="taskttl">${new Date(x.date).toLocaleDateString('he-IL',{weekday:'long', day:'2-digit', month:'2-digit'})}</div>
+            <div class="tasktime">${x.working ? 'כן עובד (חריג)' : 'לא עובד (חריג)'}</div>
+          </div>
+          <div class="taskdel" onclick="removeWorkException('${x.date}')">✕</div>
+        </div>
+      `).join('')}
+    ` : ''}
+
+    <div class="cancel" onclick="closeSheet()">סגירה</div>
+  `;
+}
+let pendingExceptionWorking = false;
+function setExceptionWorking(val){
+  pendingExceptionWorking = val;
+  const workingChip = document.getElementById('excWorkingChip');
+  const offChip = document.getElementById('excOffChip');
+  if(workingChip) workingChip.classList.toggle('on', val);
+  if(offChip) offChip.classList.toggle('on', !val);
+}
+function submitWorkException(){
+  const dateVal = document.getElementById('exceptionDate').value;
+  if(!dateVal) return;
+  workExceptions = workExceptions.filter(x=>x.date!==dateVal);
+  workExceptions.push({ date: dateVal, working: pendingExceptionWorking });
+  saveWorkExceptions();
+  pendingExceptionWorking = false;
+  renderWorkDaysSettingsSheet();
+}
+function removeWorkException(date){
+  workExceptions = workExceptions.filter(x=>x.date!==date);
+  saveWorkExceptions();
+  renderWorkDaysSettingsSheet();
+}
+function toggleWorkDay(i){
+  workDaysPattern[i] = !workDaysPattern[i];
+  saveWorkDaysPattern();
+  renderWorkDaysSettingsSheet();
+}
+
 function debtPaidAmount(debtId){
   return debtPayments.filter(p=>p.debtId===debtId).reduce((s,p)=>s+p.amount, 0);
 }
@@ -1447,6 +1569,18 @@ function renderDebtsScreen(){
   const overallPct = totalOwedOriginal>0 ? Math.min(100, Math.round((totalPaid/totalOwedOriginal)*100)) : 0;
   const sorted = [...debts].sort((a,b)=> debtRemaining(b) - debtRemaining(a));
 
+  // Monthly target: sum of agreed monthly payments across debts still owed
+  const monthlyTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed).reduce((s,d)=>s+d.monthlyAgreed, 0);
+  const now = new Date();
+  const paidThisMonth = debtPayments.filter(p=>{
+    const pd = new Date(p.ts);
+    return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
+  }).reduce((s,p)=>s+p.amount, 0);
+  const monthlyLeft = Math.max(0, monthlyTarget - paidThisMonth);
+  const monthlyPct = monthlyTarget>0 ? Math.min(100, Math.round((paidThisMonth/monthlyTarget)*100)) : 0;
+  const remainingWorkDays = countRemainingWorkDaysInMonth();
+  const perWorkDay = remainingWorkDays>0 ? Math.ceil(monthlyLeft/remainingWorkDays) : 0;
+
   app.innerHTML = `
     <header>
       <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
@@ -1462,6 +1596,18 @@ function renderDebtsScreen(){
         <span>מתוך: <b>${fmt(totalOwedOriginal)}</b></span>
       </div>
     </div>
+
+    ${monthlyTarget>0 ? `
+    <div class="goalcard">
+      <div class="goalhead"><div class="goallabel">יעד להחזרים החודש</div><div class="goalnums">${fmt(paidThisMonth)} <b>/ ${fmt(monthlyTarget)}</b></div></div>
+      <div class="goalbar"><div class="goalbarfill ${monthlyPct>=100?'done':''}" style="width:${monthlyPct}%"></div></div>
+      <div class="goalmsg ${monthlyPct>=100?'done':''}">
+        ${monthlyPct>=100 ? '🎉 השלמת את יעד ההחזרים החודשי!' :
+          (remainingWorkDays>0 ? `נשארו ${remainingWorkDays} ימי עבודה החודש · כדאי לשים בצד בערך <b style="color:var(--accent)">${fmt(perWorkDay)}</b> ליום עבודה` : 'אין עוד ימי עבודה החודש לפי הלוח שהגדרת')}
+      </div>
+    </div>
+    <div class="wdbtn" style="display:inline-block; margin:0 18px 6px; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>
+    ` : (debts.length>0 ? `<div class="wdbtn" style="display:inline-block; margin:10px 18px 6px; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>` : '')}
 
     ${debts.length>0 ? `
     <div class="goalcard">
@@ -1547,7 +1693,11 @@ function openDebtSheet(id){
     <input id="debtName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם בעל החוב" value="${d ? d.creditorName : ''}">
     <input id="debtTotal" class="goalinput" type="number" inputmode="decimal" placeholder="סכום החוב הכולל" value="${d ? d.totalOwed : ''}">
     <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:2px 0 10px;">מה סיכמת מול בעל החוב? (לא חובה - רק אם כבר יש הסדר)</div>
-    <input id="debtMonthly" class="contactinput" style="width:100%;" type="number" inputmode="decimal" placeholder="תשלום חודשי מוסכם (לא חובה)" value="${d && d.monthlyAgreed ? d.monthlyAgreed : ''}">
+    <input id="debtMonthly" class="contactinput" style="width:100%; margin-bottom:10px;" type="number" inputmode="decimal" placeholder="תשלום חודשי מוסכם (לא חובה)" value="${d && d.monthlyAgreed ? d.monthlyAgreed : ''}">
+    <div class="deadlinerow">
+      <input id="debtDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="באיזה יום בחודש? (למשל 5)" value="${d && d.dueDay ? d.dueDay : ''}">
+    </div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 0;">אם ממלאים - נזכיר לך יום לפני ובאותו יום</div>
     <div class="saverow" style="margin-top:14px;">
       <button class="savebtn single" onclick="submitDebt()">💾 שמירה</button>
     </div>
@@ -1559,17 +1709,39 @@ function submitDebt(){
   const total = parseFloat(document.getElementById('debtTotal').value || '0');
   const monthlyVal = parseFloat(document.getElementById('debtMonthly').value || '0');
   const monthlyAgreed = monthlyVal>0 ? monthlyVal : null;
+  const dueDayVal = parseInt(document.getElementById('debtDueDay').value || '0', 10);
+  const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
   if(!name || !total || total<=0) return;
   if(debtEditTargetId){
     const d = debts.find(x=>x.id===debtEditTargetId);
-    if(d){ d.creditorName = name; d.totalOwed = total; d.monthlyAgreed = monthlyAgreed; }
+    if(d){ d.creditorName = name; d.totalOwed = total; d.monthlyAgreed = monthlyAgreed; d.dueDay = dueDay; }
   } else {
-    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, monthlyAgreed, createdTs:Date.now() });
+    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, monthlyAgreed, dueDay, createdTs:Date.now() });
   }
   saveDebts();
   debtEditTargetId = null;
   closeSheet();
   render();
+  checkMonthlyDebtReminders();
+}
+function checkMonthlyDebtReminders(){
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${now.getMonth()+1}`;
+  debts.forEach(debt=>{
+    if(!debt.monthlyAgreed || !debt.dueDay) return;
+    if(debtRemaining(debt) <= 0) return;
+    const dueDate = new Date(now.getFullYear(), now.getMonth(), debt.dueDay, 9, 0, 0);
+    const dayBeforeId = `debtdue-${debt.id}-${ym}-before`;
+    const onDayId = `debtdue-${debt.id}-${ym}-day`;
+    const dayBefore = new Date(dueDate.getTime() - 24*60*60*1000);
+    if(!tasks.find(t=>t.id===dayBeforeId)){
+      tasks.push({ id:dayBeforeId, title:`💰 מחר תשלום ל${debt.creditorName} · ${fmt(debt.monthlyAgreed)}`, deadline:dayBefore.getTime(), done:false });
+    }
+    if(!tasks.find(t=>t.id===onDayId)){
+      tasks.push({ id:onDayId, title:`💰 היום תשלום ל${debt.creditorName} · ${fmt(debt.monthlyAgreed)}`, deadline:dueDate.getTime(), done:false });
+    }
+  });
+  saveTasks();
 }
 function deleteDebt(id){
   if(!confirm('למחוק את בעל החוב הזה? היסטוריית התשלומים שלו תימחק גם היא.')) return;
