@@ -1960,7 +1960,7 @@ function renderDebtsScreen(){
         <div class="task ok" style="margin-bottom:8px;">
           <div class="taskmid" style="width:100%;">
             <div class="taskttl">${escHtml(t.description||'')}</div>
-            <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'} · ${dateStr} · ${fmt(Math.abs(amt))}</div>
+            <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}</div>
           </div>
         </div>
       `;
