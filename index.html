@@ -1942,17 +1942,28 @@ function submitDebt(){
   render();
   checkMonthlyDebtReminders();
 }
-function checkMonthlyDebtReminders(){
+function nextDueDateFor(dueDay, hour){
   const now = new Date();
-  const ym = `${now.getFullYear()}-${now.getMonth()+1}`;
-  // one-time+ongoing cleanup: retire ALL old-format debt reminder tasks (they had a wording bug
-  // where "מחר/היום" was baked into the title forever, and duplicates piled up across months)
-  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('debtdue-') && !t.id.endsWith('-dayv2')));
+  const today = now.getDate();
+  let year = now.getFullYear(), month = now.getMonth();
+  if(dueDay < today){
+    // this month's occurrence already passed - schedule for next month instead
+    month += 1;
+    if(month > 11){ month = 0; year += 1; }
+  }
+  return new Date(year, month, dueDay, hour==null?9:hour, 0, 0);
+}
+function checkMonthlyDebtReminders(){
+  // one-time+ongoing cleanup: retire ALL old-format debt reminder tasks (previous versions had
+  // a bug where a due-day already passed this month kept generating a "you're late" task instead
+  // of rolling forward to next month's occurrence)
+  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('debtdue-') && !t.id.endsWith('-dayv3')));
   debts.forEach(debt=>{
     if(!debt.monthlyAgreed || !debt.dueDay) return;
     if(debtRemaining(debt) <= 0) return;
-    const dueDate = new Date(now.getFullYear(), now.getMonth(), debt.dueDay, 9, 0, 0);
-    const onDayId = `debtdue-${debt.id}-${ym}-dayv2`;
+    const dueDate = nextDueDateFor(debt.dueDay);
+    const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+    const onDayId = `debtdue-${debt.id}-${ym}-dayv3`;
     if(!tasks.find(t=>t.id===onDayId)){
       tasks.push({ id:onDayId, title:`💰 תשלום ל${debt.creditorName} · ${fmt(debt.monthlyAgreed)} · יום ${debt.dueDay} לחודש`, deadline:dueDate.getTime(), done:false });
     }
@@ -2027,14 +2038,13 @@ function deleteRecurring(id){
   render();
 }
 function checkMonthlyRecurringReminders(){
-  const now = new Date();
-  const ym = `${now.getFullYear()}-${now.getMonth()+1}`;
-  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('recdue-') && !t.id.endsWith('-dayv2')));
+  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('recdue-') && !t.id.endsWith('-dayv3')));
   recurringCharges.forEach(r=>{
     if(!r.dueDay) return;
     if(r.installmentsLeft===0) return; // finished plan, no more charges
-    const dueDate = new Date(now.getFullYear(), now.getMonth(), r.dueDay, 9, 0, 0);
-    const onDayId = `recdue-${r.id}-${ym}-dayv2`;
+    const dueDate = nextDueDateFor(r.dueDay);
+    const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+    const onDayId = `recdue-${r.id}-${ym}-dayv3`;
     if(r.isAutomatic){
       tasks = tasks.filter(t=>t.id!==onDayId); // remove any reminder that existed before it was marked automatic
       return; // deducted automatically - no need to remind, only used for the daily-target math
