@@ -30,6 +30,7 @@ async function scrapeIsracard() {
     startDate: new Date(Date.now() - DAYS_BACK * 86400000),
     combineInstallments: false,
     showBrowser: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   };
   const credentials = {
     id: requireEnv('ISRACARD_ID'),
@@ -64,6 +65,7 @@ async function scrapeMax() {
     startDate: new Date(Date.now() - DAYS_BACK * 86400000),
     combineInstallments: false,
     showBrowser: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
   };
   const credentials = {
     username: requireEnv('MAX_USERNAME'),
