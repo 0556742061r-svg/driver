@@ -1345,12 +1345,21 @@ function renderTasksSection(){
   if(open.length===0) return '';
   const now = Date.now();
   return `<div class="taskswrap">${open.map(t=>{
-    const minsLeft = Math.round((t.deadline - now)/60000);
+    const msLeft = t.deadline - now;
+    const minsLeft = Math.round(msLeft/60000);
     let cls = 'ok';
     if(minsLeft<=0) cls='overdue';
     else if(minsLeft<=30) cls='soon';
     const timeStr = new Date(t.deadline).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
-    const label = minsLeft<=0 ? `באיחור של ${Math.abs(minsLeft)} דק'` : (minsLeft<60 ? `עוד ${minsLeft} דק'` : `עד השעה ${timeStr}`);
+    let label;
+    if(minsLeft<=0){
+      const daysLate = Math.floor(Math.abs(msLeft)/86400000);
+      label = daysLate<=0 ? 'באיחור - עבר היום' : (daysLate===1 ? 'באיחור של יום אחד' : `באיחור של ${daysLate} ימים`);
+    } else if(minsLeft<60){
+      label = `עוד ${minsLeft} דק'`;
+    } else {
+      label = `עד השעה ${timeStr}`;
+    }
     return `
       <div class="task ${cls}">
         <div class="taskmid">
@@ -1841,7 +1850,9 @@ function renderDebtsScreen(){
           </div>
           ${(r.dueDay || r.installmentsLeft!=null) ? `
           <div class="dchips">
-            ${(r.dueDay && !isFinished) ? `<div class="dchip ${isPastDue?'':'due'}">📅 יורד ביום ${r.dueDay} לחודש</div>` : ''}
+            ${(r.dueDay && !isFinished) ? (r.isAutomatic
+                ? `<div class="dchip">🔁 יורד אוטומטית ביום ${r.dueDay} לחודש</div>`
+                : `<div class="dchip ${isPastDue?'':'due'}">📅 יורד ביום ${r.dueDay} לחודש</div>`) : ''}
             ${r.installmentsLeft!=null ? (isFinished
                 ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ העסקה הסתיימה</div>`
                 : `<div class="dchip">🔢 נשארו ${r.installmentsLeft} תשלומים</div>`) : ''}
@@ -1971,7 +1982,11 @@ function openRecurringSheet(id){
     <div class="deadlinerow">
       <input id="recDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="למשל 1" value="${r && r.dueDay ? r.dueDay : ''}">
     </div>
-    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">אם ממלאים - נזכיר לך באותו יום</div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">אם ממלאים - נזכיר לך באותו יום (אלא אם מסמנים למטה שזה יורד אוטומטית)</div>
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
+      <input id="recAutomatic" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${r && r.isAutomatic ? 'checked' : ''}>
+      <span>🔁 יורד אוטומטית מהחשבון/הכרטיס (הוראת קבע) - לא צריך תזכורת, רק לחישוב היומי</span>
+    </label>
     <div class="fieldlabel">מספר תשלומים שנותרו (רק אם זו עסקה עם סוף, כמו הלוואה)</div>
     <input id="recInstallments" class="contactinput" style="width:100%; margin-bottom:4px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם זה חיוב קבוע לצמיתות" value="${r && r.installmentsLeft!=null ? r.installmentsLeft : ''}">
     <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">לאחר שתסמנו את התשלום האחרון כ'שולם' - החיוב יפסיק להיספר אוטומטית</div>
@@ -1988,15 +2003,16 @@ function submitRecurring(){
   const amount = parseFloat(document.getElementById('recAmount').value || '0');
   const dueDayVal = parseInt(document.getElementById('recDueDay').value || '0', 10);
   const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
+  const isAutomatic = document.getElementById('recAutomatic').checked;
   const installmentsRaw = document.getElementById('recInstallments').value;
   const installmentsLeft = (installmentsRaw!=='' && parseInt(installmentsRaw,10)>=0) ? parseInt(installmentsRaw,10) : null;
   const note = (document.getElementById('recNote').value || '').trim();
   if(!name || !amount || amount<=0) return;
   if(recurringEditTargetId){
     const r = recurringCharges.find(x=>x.id===recurringEditTargetId);
-    if(r){ r.name = name; r.amount = amount; r.dueDay = dueDay; r.note = note; r.installmentsLeft = installmentsLeft; }
+    if(r){ r.name = name; r.amount = amount; r.dueDay = dueDay; r.note = note; r.installmentsLeft = installmentsLeft; r.isAutomatic = isAutomatic; }
   } else {
-    recurringCharges.push({ id:'rec'+Date.now()+Math.random().toString(36).slice(2,7), name, amount, dueDay, note, installmentsLeft, createdTs:Date.now() });
+    recurringCharges.push({ id:'rec'+Date.now()+Math.random().toString(36).slice(2,7), name, amount, dueDay, note, installmentsLeft, isAutomatic, createdTs:Date.now() });
   }
   saveRecurring();
   recurringEditTargetId = null;
@@ -2019,6 +2035,10 @@ function checkMonthlyRecurringReminders(){
     if(r.installmentsLeft===0) return; // finished plan, no more charges
     const dueDate = new Date(now.getFullYear(), now.getMonth(), r.dueDay, 9, 0, 0);
     const onDayId = `recdue-${r.id}-${ym}-dayv2`;
+    if(r.isAutomatic){
+      tasks = tasks.filter(t=>t.id!==onDayId); // remove any reminder that existed before it was marked automatic
+      return; // deducted automatically - no need to remind, only used for the daily-target math
+    }
     if(!tasks.find(t=>t.id===onDayId)){
       tasks.push({ id:onDayId, title:`📌 חיוב: ${r.name} · ${fmt(r.amount)} · יום ${r.dueDay} לחודש`, deadline:dueDate.getTime(), done:false });
     }
