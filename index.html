@@ -1648,6 +1648,34 @@ function renderDebtEntryPoint(){
   </div>`;
 }
 
+function countWorkDaysInFullMonth(year, month){
+  const lastDay = new Date(year, month+1, 0).getDate();
+  let count = 0;
+  for(let day = 1; day <= lastDay; day++){
+    if(isWorkingOn(new Date(year, month, day))) count++;
+  }
+  return count;
+}
+function nextOccurrenceDaysAway(dueDay, today, daysInMonth){
+  if(dueDay >= today) return dueDay - today;
+  return (daysInMonth - today) + dueDay;
+}
+function findNearestUpcomingCharge(){
+  const now = new Date();
+  const today = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const candidates = [];
+  debts.filter(d=>debtRemaining(d)>0 && d.dueDay && d.monthlyAgreed).forEach(d=>{
+    candidates.push({ name:d.creditorName, amount:d.monthlyAgreed, daysAway: nextOccurrenceDaysAway(d.dueDay, today, daysInMonth), icon:'🤝' });
+  });
+  recurringCharges.filter(r=>r.dueDay).forEach(r=>{
+    candidates.push({ name:r.name, amount:r.amount, daysAway: nextOccurrenceDaysAway(r.dueDay, today, daysInMonth), icon:'📌' });
+  });
+  if(candidates.length===0) return null;
+  candidates.sort((a,b)=>a.daysAway-b.daysAway);
+  return candidates[0];
+}
+
 function openDebtsScreen(){
   currentScreen = 'debts';
   render();
@@ -1665,19 +1693,16 @@ function renderDebtsScreen(){
   const overallPct = totalOwedOriginal>0 ? Math.min(100, Math.round((totalPaid/totalOwedOriginal)*100)) : 0;
   const sorted = [...debts].sort((a,b)=> debtRemaining(b) - debtRemaining(a));
   const sortedRecurring = [...recurringCharges].sort((a,b)=> (a.dueDay||99) - (b.dueDay||99));
-
-  // Combined daily target: remaining agreed monthly debt payments + full recurring fixed costs
-  const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed).reduce((s,d)=>s+d.monthlyAgreed, 0);
   const now = new Date();
-  const paidThisMonth = debtPayments.filter(p=>{
-    const pd = new Date(p.ts);
-    return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
-  }).reduce((s,p)=>s+p.amount, 0);
-  const debtMonthlyLeft = Math.max(0, monthlyDebtTarget - paidThisMonth);
+
+  // Steady daily rate: total monthly fixed obligations spread evenly across the WHOLE month's
+  // workdays, so the number stays stable all month instead of jumping each time a due-date passes.
+  const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed).reduce((s,d)=>s+d.monthlyAgreed, 0);
   const recurringTotal = totalRecurringMonthly();
-  const combinedLeft = debtMonthlyLeft + recurringTotal;
-  const remainingWorkDays = countRemainingWorkDaysInMonth();
-  const perWorkDay = remainingWorkDays>0 ? Math.ceil(combinedLeft/remainingWorkDays) : 0;
+  const combinedMonthlyTotal = monthlyDebtTarget + recurringTotal;
+  const fullMonthWorkDays = countWorkDaysInFullMonth(now.getFullYear(), now.getMonth());
+  const perWorkDay = fullMonthWorkDays>0 ? Math.ceil(combinedMonthlyTotal/fullMonthWorkDays) : 0;
+  const nearestCharge = findNearestUpcomingCharge();
   const todayDate = now.getDate();
 
   app.innerHTML = `
@@ -1696,16 +1721,22 @@ function renderDebtsScreen(){
       </div>
     </div>
 
-    ${combinedLeft>0 ? `
+    ${combinedMonthlyTotal>0 ? `
     <div class="targetcard">
-      <div class="targetlabel">💪 כמה כדאי לשים בצד ליום עבודה</div>
+      <div class="targetlabel">💪 קצב יומי קבוע לכיסוי החודש</div>
       <div class="targetamt"><span>₪</span>${perWorkDay.toLocaleString('he-IL')}</div>
       <div class="targetsub">
-        ${remainingWorkDays>0 ? `<span>נשארו <b>${remainingWorkDays}</b> ימי עבודה החודש</span>` : `<span>אין עוד ימי עבודה החודש לפי הלוח שהגדרת</span>`}
+        <span>לכל יום עבודה, כל החודש - לא משנה איזה תאריך היום</span>
       </div>
+      ${nearestCharge ? `
+      <div class="targetbreakrow" style="margin-top:12px; padding-top:12px; border-top:1px solid #33372a;">
+        <span>🔜 הקרוב ביותר: ${nearestCharge.icon} ${escHtml(nearestCharge.name)}</span>
+        <b>${fmt(nearestCharge.amount)} · ${nearestCharge.daysAway===0 ? 'היום!' : (nearestCharge.daysAway===1 ? 'מחר' : `בעוד ${nearestCharge.daysAway} ימים`)}</b>
+      </div>` : ''}
       <div class="targetbreak">
-        ${debtMonthlyLeft>0 ? `<div class="targetbreakrow"><span>🤝 החזרי חובות שנותרו החודש</span><b>${fmt(debtMonthlyLeft)}</b></div>` : ''}
-        ${recurringTotal>0 ? `<div class="targetbreakrow"><span>📌 הוצאות קבועות</span><b>${fmt(recurringTotal)}</b></div>` : ''}
+        ${monthlyDebtTarget>0 ? `<div class="targetbreakrow"><span>🤝 סה"כ החזרי חובות לחודש</span><b>${fmt(monthlyDebtTarget)}</b></div>` : ''}
+        ${recurringTotal>0 ? `<div class="targetbreakrow"><span>📌 סה"כ הוצאות קבועות לחודש</span><b>${fmt(recurringTotal)}</b></div>` : ''}
+        <div class="targetbreakrow"><span>📆 ימי עבודה בחודש (לפי הלוח שלך)</span><b>${fullMonthWorkDays}</b></div>
       </div>
     </div>
     <div class="wdbtn" style="display:inline-block; margin:8px 18px 0; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>
