@@ -1,0 +1,14 @@
+{
+  "name": "bank-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pulls Isracard/Max transactions into Firestore for המונה שלי",
+  "main": "bank-sync.js",
+  "scripts": {
+    "start": "node bank-sync.js"
+  },
+  "dependencies": {
+    "israeli-bank-scrapers": "^6.7.3",
+    "firebase-admin": "^12.1.0"
+  }
+}
