@@ -1,0 +1,36 @@
+name: Bank Sync
+
+on:
+  schedule:
+    # Runs daily at 05:00 UTC (≈ 07:00/08:00 Israel time depending on DST)
+    - cron: '0 5 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm install
+
+      - name: Run bank sync
+        working-directory: scripts
+        env:
+          ISRACARD_ID: ${{ secrets.ISRACARD_ID }}
+          ISRACARD_PASSWORD: ${{ secrets.ISRACARD_PASSWORD }}
+          ISRACARD_CARD6DIGITS: ${{ secrets.ISRACARD_CARD6DIGITS }}
+          MAX_USERNAME: ${{ secrets.MAX_USERNAME }}
+          MAX_PASSWORD: ${{ secrets.MAX_PASSWORD }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_UID: ${{ secrets.FIREBASE_UID }}
+        run: node bank-sync.js
