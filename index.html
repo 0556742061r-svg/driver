@@ -1528,6 +1528,13 @@ function isWorkingOn(d){
   if(exc) return exc.working;
   return workDaysPattern[d.getDay()];
 }
+function totalNetEarnedThisMonth(){
+  const now = new Date();
+  return entries.filter(e=>{
+    const ed = new Date(e.ts);
+    return ed.getFullYear()===now.getFullYear() && ed.getMonth()===now.getMonth();
+  }).reduce((s,e)=> s + netOf(e), 0);
+}
 function countRemainingWorkDaysInMonth(){
   const now = new Date();
   const year = now.getFullYear(), month = now.getMonth();
@@ -1717,13 +1724,16 @@ function renderDebtsScreen(){
   const sortedRecurring = [...recurringCharges].sort((a,b)=> (a.dueDay||99) - (b.dueDay||99));
   const now = new Date();
 
-  // Steady daily rate: total monthly fixed obligations spread evenly across the WHOLE month's
-  // workdays, so the number stays stable all month instead of jumping each time a due-date passes.
+  // Dynamic catch-up daily target: compares total fixed obligations for the month against what
+  // you've actually earned so far this month. If a day falls short, the shortfall automatically
+  // raises the required amount for the remaining days - no manual tracking needed.
   const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed).reduce((s,d)=>s+d.monthlyAgreed, 0);
   const recurringTotal = totalRecurringMonthly();
   const combinedMonthlyTotal = monthlyDebtTarget + recurringTotal;
-  const fullMonthWorkDays = countWorkDaysInFullMonth(now.getFullYear(), now.getMonth());
-  const perWorkDay = fullMonthWorkDays>0 ? Math.ceil(combinedMonthlyTotal/fullMonthWorkDays) : 0;
+  const earnedThisMonth = totalNetEarnedThisMonth();
+  const stillNeeded = Math.max(0, combinedMonthlyTotal - earnedThisMonth);
+  const remainingWorkDays = countRemainingWorkDaysInMonth();
+  const perWorkDay = remainingWorkDays>0 ? Math.ceil(stillNeeded/remainingWorkDays) : 0;
   const nearestCharge = findNearestUpcomingCharge();
   const todayDate = now.getDate();
 
@@ -1745,10 +1755,10 @@ function renderDebtsScreen(){
 
     ${combinedMonthlyTotal>0 ? `
     <div class="targetcard">
-      <div class="targetlabel">💪 קצב יומי קבוע לכיסוי החודש</div>
+      <div class="targetlabel">💪 כמה עוד צריך להביא היום</div>
       <div class="targetamt"><span>₪</span>${perWorkDay.toLocaleString('he-IL')}</div>
       <div class="targetsub">
-        <span>לכל יום עבודה, כל החודש - לא משנה איזה תאריך היום</span>
+        <span>מתעדכן אוטומטית - אם לא משיגים את הסכום, המחר יעלה בהתאם</span>
       </div>
       ${nearestCharge ? `
       <div class="targetbreakrow" style="margin-top:12px; padding-top:12px; border-top:1px solid #33372a;">
@@ -1758,7 +1768,8 @@ function renderDebtsScreen(){
       <div class="targetbreak">
         ${monthlyDebtTarget>0 ? `<div class="targetbreakrow"><span>🤝 סה"כ החזרי חובות לחודש</span><b>${fmt(monthlyDebtTarget)}</b></div>` : ''}
         ${recurringTotal>0 ? `<div class="targetbreakrow"><span>📌 סה"כ הוצאות קבועות לחודש</span><b>${fmt(recurringTotal)}</b></div>` : ''}
-        <div class="targetbreakrow"><span>📆 ימי עבודה בחודש (לפי הלוח שלך)</span><b>${fullMonthWorkDays}</b></div>
+        <div class="targetbreakrow"><span>💵 הרווחת החודש</span><b>${fmt(earnedThisMonth)}</b></div>
+        <div class="targetbreakrow"><span>📆 ימי עבודה שנשארו החודש</span><b>${remainingWorkDays}</b></div>
       </div>
     </div>
     <div class="wdbtn" style="display:inline-block; margin:8px 18px 0; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>
@@ -2038,21 +2049,9 @@ function deleteRecurring(id){
   render();
 }
 function checkMonthlyRecurringReminders(){
-  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('recdue-') && !t.id.endsWith('-dayv3')));
-  recurringCharges.forEach(r=>{
-    if(!r.dueDay) return;
-    if(r.installmentsLeft===0) return; // finished plan, no more charges
-    const dueDate = nextDueDateFor(r.dueDay);
-    const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
-    const onDayId = `recdue-${r.id}-${ym}-dayv3`;
-    if(r.isAutomatic){
-      tasks = tasks.filter(t=>t.id!==onDayId); // remove any reminder that existed before it was marked automatic
-      return; // deducted automatically - no need to remind, only used for the daily-target math
-    }
-    if(!tasks.find(t=>t.id===onDayId)){
-      tasks.push({ id:onDayId, title:`📌 חיוב: ${r.name} · ${fmt(r.amount)} · יום ${r.dueDay} לחודש`, deadline:dueDate.getTime(), done:false });
-    }
-  });
+  // recurring fixed charges never generate reminder tasks - they exist purely to feed the daily
+  // target calculation. Just clean up any old reminder tasks from earlier versions of the app.
+  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('recdue-')));
   saveTasks();
 }
 function openPaymentSheet(debtId){
