@@ -445,6 +445,8 @@ const GOAL_KEY = 'dailygoal_v1';
 const DEBTS_KEY = 'debts_v1';
 const DEBT_PAYMENTS_KEY = 'debtpayments_v1';
 const RECURRING_KEY = 'recurring_v1';
+const EXTRA_INCOME_KEY = 'extraincome_v1';
+const BANK_TRANSACTIONS_KEY = 'banktx_v1'; // written externally by the optional bank-sync GitHub Action, read-only here
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
 const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
@@ -459,6 +461,8 @@ let notifiedTaskAlerts = new Set(); // tracks which task alerts already fired, e
 let debts = [];
 let debtPayments = [];
 let recurringCharges = [];
+let extraIncomes = [];
+let bankTransactions = [];
 let currentScreen = 'main'; // 'main' | 'debts'
 let debtEditTargetId = null;
 let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
@@ -755,6 +759,16 @@ async function attachFirestoreListeners(){
     render();
     checkMonthlyRecurringReminders();
   }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(EXTRA_INCOME_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    extraIncomes = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(BANK_TRANSACTIONS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    bankTransactions = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
     const d = doc.data();
     const arr = (d && d.value) ? JSON.parse(d.value) : [];
@@ -777,9 +791,9 @@ async function checkAndOfferLocalImport(){
     if(localEntries && localEntries.length > 0){
       const ok = confirm(`נמצאו ${localEntries.length} רשומות שמורות במכשיר הזה (מלפני ההתחברות). לייבא אותן לחשבון שלך?`);
       if(!ok) return;
-      const [localTasks, localVoice, localWD, localWH, localDebts, localDebtPayments, localRecurring] = await Promise.all([
+      const [localTasks, localVoice, localWD, localWH, localDebts, localDebtPayments, localRecurring, localExtraIncome] = await Promise.all([
         storageGet(TASKS_KEY), storageGet(VOICE_KEY), storageGet(WORKDAY_KEY), storageGet(WORKDAY_HISTORY_KEY),
-        storageGet(DEBTS_KEY), storageGet(DEBT_PAYMENTS_KEY), storageGet(RECURRING_KEY)
+        storageGet(DEBTS_KEY), storageGet(DEBT_PAYMENTS_KEY), storageGet(RECURRING_KEY), storageGet(EXTRA_INCOME_KEY)
       ]);
       await storageSet(STORAGE_KEY, localEntries);
       if(localTasks && localTasks.length) await storageSet(TASKS_KEY, localTasks);
@@ -789,6 +803,7 @@ async function checkAndOfferLocalImport(){
       if(localDebts && localDebts.length) await storageSet(DEBTS_KEY, localDebts);
       if(localDebtPayments && localDebtPayments.length) await storageSet(DEBT_PAYMENTS_KEY, localDebtPayments);
       if(localRecurring && localRecurring.length) await storageSet(RECURRING_KEY, localRecurring);
+      if(localExtraIncome && localExtraIncome.length) await storageSet(EXTRA_INCOME_KEY, localExtraIncome);
       alert('הנתונים יובאו בהצלחה! ✅');
     }
   }catch(e){ console.error('import check failed', e); }
@@ -811,6 +826,7 @@ async function load(){
   debts = await storageGet(DEBTS_KEY);
   debtPayments = await storageGet(DEBT_PAYMENTS_KEY);
   recurringCharges = await storageGet(RECURRING_KEY);
+  extraIncomes = await storageGet(EXTRA_INCOME_KEY);
   const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
   if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
   workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
@@ -827,6 +843,7 @@ function saveDailyGoal(){ storageSet(GOAL_KEY, dailyGoal===null ? [] : [dailyGoa
 function saveDebts(){ storageSet(DEBTS_KEY, debts); }
 function saveDebtPayments(){ storageSet(DEBT_PAYMENTS_KEY, debtPayments); }
 function saveRecurring(){ storageSet(RECURRING_KEY, recurringCharges); }
+function saveExtraIncomes(){ storageSet(EXTRA_INCOME_KEY, extraIncomes); }
 function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
 function saveWorkExceptions(){ storageSet(WORK_EXCEPTIONS_KEY, workExceptions); }
 
@@ -1651,7 +1668,114 @@ function debtPaidThisMonthAmount(debtId){
   }).reduce((s,p)=>s+p.amount, 0);
 }
 function totalRecurringMonthly(){
-  return recurringCharges.filter(r=>r.installmentsLeft!==0).reduce((s,r)=>s+r.amount, 0);
+  return recurringCharges.filter(r=>r.installmentsLeft!==0 && !r.coveredByExtraIncome).reduce((s,r)=>s+r.amount, 0);
+}
+function currentYm(){
+  const n = new Date();
+  return `${n.getFullYear()}-${n.getMonth()+1}`;
+}
+function extraIncomeStatusFor(item){
+  const ym = currentYm();
+  return (item.monthly && item.monthly[ym]) ? item.monthly[ym] : { status:'pending', amount:null };
+}
+function extraIncomeAmountForMonth(item){
+  const st = extraIncomeStatusFor(item);
+  if(st.status==='postponed') return 0;
+  if(st.status==='received') return (st.amount!=null ? st.amount : item.estimate);
+  return item.estimate; // pending - conservative estimate assumed until told otherwise
+}
+function totalExtraIncomeThisMonth(){
+  return extraIncomes.reduce((s,item)=> s + extraIncomeAmountForMonth(item), 0);
+}
+function markExtraIncomePostponed(id){
+  const item = extraIncomes.find(x=>x.id===id);
+  if(!item) return;
+  item.monthly = item.monthly || {};
+  item.monthly[currentYm()] = { status:'postponed', amount:null };
+  saveExtraIncomes();
+  render();
+}
+function markExtraIncomePending(id){
+  const item = extraIncomes.find(x=>x.id===id);
+  if(!item) return;
+  item.monthly = item.monthly || {};
+  delete item.monthly[currentYm()];
+  saveExtraIncomes();
+  render();
+}
+let extraIncomeEditTargetId = null;
+function openExtraIncomeReceivedSheet(id){
+  const item = extraIncomes.find(x=>x.id===id);
+  if(!item) return;
+  extraIncomeEditTargetId = id;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  const st = extraIncomeStatusFor(item);
+  sheet.innerHTML = `
+    <h2>💎 סימון כהתקבל: ${escHtml(item.name)}</h2>
+    <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:10px;">כמה בדיוק קיבלת החודש?</div>
+    <input id="extraIncomeAmount" class="goalinput" type="number" inputmode="decimal" placeholder="סכום בפועל" value="${st.amount!=null ? st.amount : item.estimate}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitExtraIncomeReceived()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitExtraIncomeReceived(){
+  const amount = parseFloat(document.getElementById('extraIncomeAmount').value || '0');
+  if(!amount || amount<=0) return;
+  const item = extraIncomes.find(x=>x.id===extraIncomeEditTargetId);
+  if(item){
+    item.monthly = item.monthly || {};
+    item.monthly[currentYm()] = { status:'received', amount };
+    saveExtraIncomes();
+  }
+  extraIncomeEditTargetId = null;
+  closeSheet();
+  render();
+}
+function openExtraIncomeSheet(id){
+  extraIncomeEditTargetId = id || null;
+  const item = id ? extraIncomes.find(x=>x.id===id) : null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>💎 ${item ? 'עריכת הכנסה נוספת' : 'הוספת הכנסה נוספת'}</h2>
+    <input id="eiName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם המקור (למשל: עמלת רב-קו)" value="${item ? escHtml(item.name) : ''}">
+    <input id="eiEstimate" class="goalinput" type="number" inputmode="decimal" placeholder="הערכה שמרנית לחודש (המינימום שכמעט בטוח יגיע)" value="${item ? item.estimate : ''}">
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:2px 0 10px;">באיזה יום בחודש זה בדרך כלל מגיע? (לא חובה)</div>
+    <input id="eiDueDay" class="contactinput" style="width:100%; margin-bottom:10px;" type="number" min="1" max="31" inputmode="numeric" placeholder="למשל 20" value="${item && item.dueDay ? item.dueDay : ''}">
+    <div class="fieldlabel">הערה (לא חובה)</div>
+    <textarea id="eiNote" class="noteinput" placeholder="למשל: תלוי שאני מספיק להביא חשבונית">${item && item.note ? escHtml(item.note) : ''}</textarea>
+    <div class="saverow" style="margin-top:4px;">
+      <button class="savebtn single" onclick="submitExtraIncome()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitExtraIncome(){
+  const name = (document.getElementById('eiName').value || '').trim();
+  const estimate = parseFloat(document.getElementById('eiEstimate').value || '0');
+  const dueDayVal = parseInt(document.getElementById('eiDueDay').value || '0', 10);
+  const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
+  const note = (document.getElementById('eiNote').value || '').trim();
+  if(!name || !estimate || estimate<=0) return;
+  if(extraIncomeEditTargetId){
+    const item = extraIncomes.find(x=>x.id===extraIncomeEditTargetId);
+    if(item){ item.name = name; item.estimate = estimate; item.dueDay = dueDay; item.note = note; }
+  } else {
+    extraIncomes.push({ id:'ei'+Date.now()+Math.random().toString(36).slice(2,7), name, estimate, dueDay, note, monthly:{}, createdTs:Date.now() });
+  }
+  saveExtraIncomes();
+  extraIncomeEditTargetId = null;
+  closeSheet();
+  render();
+}
+function deleteExtraIncome(id){
+  if(!confirm('למחוק את מקור ההכנסה הזה?')) return;
+  extraIncomes = extraIncomes.filter(x=>x.id!==id);
+  saveExtraIncomes();
+  render();
 }
 function markRecurringPaid(id){
   const r = recurringCharges.find(x=>x.id===id);
@@ -1722,16 +1846,22 @@ function renderDebtsScreen(){
   const overallPct = totalOwedOriginal>0 ? Math.min(100, Math.round((totalPaid/totalOwedOriginal)*100)) : 0;
   const sorted = [...debts].sort((a,b)=> debtRemaining(b) - debtRemaining(a));
   const sortedRecurring = [...recurringCharges].sort((a,b)=> (a.dueDay||99) - (b.dueDay||99));
+  const sortedExtraIncomes = [...extraIncomes].sort((a,b)=> (a.dueDay||99) - (b.dueDay||99));
   const now = new Date();
 
   // Dynamic catch-up daily target: compares total fixed obligations for the month against what
   // you've actually earned so far this month. If a day falls short, the shortfall automatically
   // raises the required amount for the remaining days - no manual tracking needed.
-  const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed).reduce((s,d)=>s+d.monthlyAgreed, 0);
+  const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && !d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
   const recurringTotal = totalRecurringMonthly();
   const combinedMonthlyTotal = monthlyDebtTarget + recurringTotal;
   const earnedThisMonth = totalNetEarnedThisMonth();
   const stillNeeded = Math.max(0, combinedMonthlyTotal - earnedThisMonth);
+  const coveredDebtsTotal = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
+  const coveredRecurringTotal = recurringCharges.filter(r=>r.installmentsLeft!==0 && r.coveredByExtraIncome).reduce((s,r)=>s+r.amount, 0);
+  const coveredTotal = coveredDebtsTotal + coveredRecurringTotal;
+  const upcomingObligations = getUpcomingObligations(14);
+  const hasConfirmedIncomeThisMonth = extraIncomes.some(i=>extraIncomeStatusFor(i).status==='received');
   const remainingWorkDays = countRemainingWorkDaysInMonth();
   const perWorkDay = remainingWorkDays>0 ? Math.ceil(stillNeeded/remainingWorkDays) : 0;
   const nearestCharge = findNearestUpcomingCharge();
@@ -1772,8 +1902,71 @@ function renderDebtsScreen(){
         <div class="targetbreakrow"><span>📆 ימי עבודה שנשארו החודש</span><b>${remainingWorkDays}</b></div>
       </div>
     </div>
+    ${coveredTotal>0 ? `
+    <div class="targetcard" style="background:linear-gradient(145deg,#1a2024,#1b1d22); border-color:#2c3a3d; margin-top:12px;">
+      <div class="targetlabel">🏦 מכוסה מהכנסה נוספת (לא בלחץ היומי)</div>
+      <div class="targetamt" style="color:var(--muted); font-size:26px;"><span>₪</span>${coveredTotal.toLocaleString('he-IL')}<span style="font-size:13px;">/חודש</span></div>
+      <div class="targetsub">
+        <span>ההתחייבויות האלה משולמות מהעמלה, לא מהנסיעות - גם אם היא מתעכבת</span>
+      </div>
+    </div>` : ''}
     <div class="wdbtn" style="display:inline-block; margin:8px 18px 0; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>
     ` : (debts.length>0 || recurringCharges.length>0 ? `<div class="wdbtn" style="display:inline-block; margin:10px 18px 6px; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>` : '')}
+
+    ${upcomingObligations.length>0 ? `
+    <div class="dsection">
+      <h3>🔭 מה יורד בקרוב (14 הימים הקרובים)</h3>
+    </div>
+    <div class="listwrap" style="margin-top:0;">
+      ${upcomingObligations.map(o=>{
+        const urgent = o.daysAway<=5 && !o.prepared;
+        const riskyCovered = o.coveredByExtraIncome && !hasConfirmedIncomeThisMonth && o.daysAway<=7;
+        const whenLabel = o.daysAway<=0 ? 'היום' : (o.daysAway===1 ? 'מחר' : `בעוד ${o.daysAway} ימים`);
+        return `
+        <div class="dcard ${(urgent||riskyCovered)?'dueflag':''} ${o.prepared?'done':''}">
+          <div class="dcardtop">
+            <div class="davatar ${o.prepared?'done':''}">${o.prepared?'✅':o.icon}</div>
+            <div class="dcardhead">
+              <div class="dname">${escHtml(o.name)}</div>
+              <div class="dsub">${fmt(o.amount)} · ${whenLabel}</div>
+            </div>
+          </div>
+          <div class="dchips">
+            ${o.coveredByExtraIncome
+                ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 אמור להיות מכוסה מהכנסה נוספת</div>`
+                : `<div class="dchip">🚗 מגיע מנסיעות</div>`}
+            ${riskyCovered ? `<div class="dchip overdue">⚠️ ההכנסה שמכסה את זה עדיין לא אושרה החודש</div>` : ''}
+          </div>
+          <div class="dactions">
+            <button class="fuelbtn" onclick="toggleObligationPrepared('${o.type}','${o.id}','${o.ym}')">${o.prepared ? '↩️ בטל סימון' : '✔️ יש לי מאיפה להשיג את זה'}</button>
+          </div>
+        </div>
+      `;
+      }).join('')}
+    </div>
+    ` : ''}
+
+    ${bankTransactions.length>0 ? `
+    <div class="dsection">
+      <h3>🏦 תנועות אחרונות מהאשראי (יובא אוטומטית)</h3>
+      <span class="dcount">${bankTransactions.length}</span>
+    </div>
+    <div class="listwrap" style="margin-top:0;">
+      ${bankTransactions.slice(0,20).map(t=>{
+        const dt = new Date(t.date);
+        const dateStr = dt.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'});
+        const amt = Number(t.amount)||0;
+        return `
+        <div class="task ok" style="margin-bottom:8px;">
+          <div class="taskmid" style="width:100%;">
+            <div class="taskttl">${escHtml(t.description||'')}</div>
+            <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'} · ${dateStr} · ${fmt(Math.abs(amt))}</div>
+          </div>
+        </div>
+      `;
+      }).join('')}
+    </div>
+    ` : ''}
 
     ${debts.length>0 ? `
     <div class="goalcard">
@@ -1816,8 +2009,9 @@ function renderDebtsScreen(){
               <div class="dpct ${isDone?'done':''}">${pct}%</div>
             </div>
             <div class="dbar"><div class="dbarfill ${isDone?'done':''}" style="width:${pct}%"></div></div>
-            ${(!isDone && (d.monthlyAgreed || d.dueDay)) ? `
+            ${(!isDone && (d.monthlyAgreed || d.dueDay || d.coveredByExtraIncome)) ? `
             <div class="dchips">
+              ${d.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
               ${d.monthlyAgreed ? `<div class="dchip">🤝 ${fmt(d.monthlyAgreed)}/חודש · כ-${Math.ceil(remaining/d.monthlyAgreed)} חודשים נותרו</div>` : ''}
               ${d.dueDay ? (isOverdue
                   ? `<div class="dchip overdue">⚠️ עבר יום ${d.dueDay} - עדיין לא שולם החודש</div>`
@@ -1859,8 +2053,9 @@ function renderDebtsScreen(){
               <div class="dsub">${fmt(r.amount)} לחודש</div>
             </div>
           </div>
-          ${(r.dueDay || r.installmentsLeft!=null) ? `
+          ${(r.dueDay || r.installmentsLeft!=null || r.coveredByExtraIncome) ? `
           <div class="dchips">
+            ${r.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
             ${(r.dueDay && !isFinished) ? (r.isAutomatic
                 ? `<div class="dchip">🔁 יורד אוטומטית ביום ${r.dueDay} לחודש</div>`
                 : `<div class="dchip ${isPastDue?'':'due'}">📅 יורד ביום ${r.dueDay} לחודש</div>`) : ''}
@@ -1873,6 +2068,43 @@ function renderDebtsScreen(){
             ${(r.installmentsLeft!=null && !isFinished) ? `<button class="fuelbtn" onclick="markRecurringPaid('${r.id}')">✔️ סימון כשולם החודש</button>` : ''}
             <button class="fuelbtn" onclick="openRecurringSheet('${r.id}')">✏️ עריכה</button>
             <button class="fuelbtn" onclick="deleteRecurring('${r.id}')">🗑️</button>
+          </div>
+        </div>
+      `;
+      }).join('')}
+    </div>
+
+    <div class="dsection">
+      <h3>💎 הכנסות משתנות נוספות</h3>
+      ${extraIncomes.length>0 ? `<span class="dcount">${fmt(totalExtraIncomeThisMonth())}/החודש</span>` : ''}
+    </div>
+    <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+      למעקב בלבד - לא משפיע על יעד הנסיעות היומי. כדי שהתחייבות תפסיק ללחוץ על יעד הנסיעות, סמן אותה כ"מכוסה מהכנסה נוספת" בעריכה שלה למטה.
+    </div>
+    <div class="listwrap" style="margin-top:0;">
+      <div class="addcard" onclick="openExtraIncomeSheet()"><span>➕</span> הוספת הכנסה נוספת</div>
+      ${sortedExtraIncomes.map(item=>{
+        const st = extraIncomeStatusFor(item);
+        return `
+        <div class="dcard">
+          <div class="dcardtop">
+            <div class="davatar">💎</div>
+            <div class="dcardhead">
+              <div class="dname">${escHtml(item.name)}</div>
+              <div class="dsub">הערכה שמרנית: ${fmt(item.estimate)}${item.dueDay ? ` · בסביבות ${item.dueDay} לחודש` : ''}</div>
+            </div>
+          </div>
+          <div class="dchips">
+            ${st.status==='received' ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ התקבל החודש: ${fmt(st.amount!=null?st.amount:item.estimate)}</div>` : ''}
+            ${st.status==='postponed' ? `<div class="dchip">⏸️ נדחה החודש - יגיע בחודש הבא</div>` : ''}
+            ${st.status==='pending' ? `<div class="dchip due">🕒 טרם סומן החודש</div>` : ''}
+          </div>
+          ${item.note ? `<div class="dnote"><span class="ic">📝</span><span>${escHtml(item.note)}</span></div>` : ''}
+          <div class="dactions">
+            <button class="fuelbtn" onclick="openExtraIncomeReceivedSheet('${item.id}')">✔️ התקבל</button>
+            ${st.status!=='postponed' ? `<button class="fuelbtn" onclick="markExtraIncomePostponed('${item.id}')">⏸️ נדחה</button>` : `<button class="fuelbtn" onclick="markExtraIncomePending('${item.id}')">↩️ איפוס</button>`}
+            <button class="fuelbtn" onclick="openExtraIncomeSheet('${item.id}')">✏️</button>
+            <button class="fuelbtn" onclick="deleteExtraIncome('${item.id}')">🗑️</button>
           </div>
         </div>
       `;
@@ -1924,6 +2156,10 @@ function openDebtSheet(id){
       <input id="debtDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="באיזה יום בחודש? (למשל 5)" value="${d && d.dueDay ? d.dueDay : ''}">
     </div>
     <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">אם ממלאים - נזכיר לך יום לפני ובאותו יום, וגם יופיע ישירות על הכרטיס</div>
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
+      <input id="debtCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${d && d.coveredByExtraIncome ? 'checked' : ''}>
+      <span>🏦 החוב הזה מכוסה מהכנסה נוספת (עמלה וכו') - לא ייכנס ללחץ היעד היומי מנסיעות</span>
+    </label>
     <div class="fieldlabel">הערה (לא חובה - כדי שתדע למה קבעת ככה בלי לפתוח שוב)</div>
     <textarea id="debtNote" class="noteinput" placeholder="למשל: סיכמנו שאני משלם ב-5 לחודש כי אז מגיע לי המשכורת">${d && d.note ? escHtml(d.note) : ''}</textarea>
     <div class="saverow" style="margin-top:4px;">
@@ -1939,13 +2175,14 @@ function submitDebt(){
   const monthlyAgreed = monthlyVal>0 ? monthlyVal : null;
   const dueDayVal = parseInt(document.getElementById('debtDueDay').value || '0', 10);
   const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
+  const coveredByExtraIncome = document.getElementById('debtCoveredByExtra').checked;
   const note = (document.getElementById('debtNote').value || '').trim();
   if(!name || !total || total<=0) return;
   if(debtEditTargetId){
     const d = debts.find(x=>x.id===debtEditTargetId);
-    if(d){ d.creditorName = name; d.totalOwed = total; d.monthlyAgreed = monthlyAgreed; d.dueDay = dueDay; d.note = note; }
+    if(d){ d.creditorName = name; d.totalOwed = total; d.monthlyAgreed = monthlyAgreed; d.dueDay = dueDay; d.note = note; d.coveredByExtraIncome = coveredByExtraIncome; }
   } else {
-    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, monthlyAgreed, dueDay, note, createdTs:Date.now() });
+    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, monthlyAgreed, dueDay, note, coveredByExtraIncome, createdTs:Date.now() });
   }
   saveDebts();
   debtEditTargetId = null;
@@ -1963,6 +2200,41 @@ function nextDueDateFor(dueDay, hour){
     if(month > 11){ month = 0; year += 1; }
   }
   return new Date(year, month, dueDay, hour==null?9:hour, 0, 0);
+}
+function daysUntilDate(dueDate){
+  const now = new Date(); now.setHours(0,0,0,0);
+  const d = new Date(dueDate); d.setHours(0,0,0,0);
+  return Math.round((d-now)/86400000);
+}
+function getUpcomingObligations(daysAhead){
+  const list = [];
+  debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && d.dueDay).forEach(d=>{
+    const dueDate = nextDueDateFor(d.dueDay);
+    const daysAway = daysUntilDate(dueDate);
+    if(daysAway<=daysAhead){
+      const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+      list.push({ type:'debt', id:d.id, name:d.creditorName, amount:d.monthlyAgreed, daysAway, coveredByExtraIncome:!!d.coveredByExtraIncome, prepared: !!(d.preparedMonths && d.preparedMonths[ym]), ym, icon:'🤝' });
+    }
+  });
+  recurringCharges.filter(r=>r.dueDay && r.installmentsLeft!==0).forEach(r=>{
+    const dueDate = nextDueDateFor(r.dueDay);
+    const daysAway = daysUntilDate(dueDate);
+    if(daysAway<=daysAhead){
+      const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+      list.push({ type:'recurring', id:r.id, name:r.name, amount:r.amount, daysAway, coveredByExtraIncome:!!r.coveredByExtraIncome, prepared: !!(r.preparedMonths && r.preparedMonths[ym]), ym, icon:'📌' });
+    }
+  });
+  list.sort((a,b)=>a.daysAway-b.daysAway);
+  return list;
+}
+function toggleObligationPrepared(type, id, ym){
+  const list = type==='debt' ? debts : recurringCharges;
+  const item = list.find(x=>x.id===id);
+  if(!item) return;
+  item.preparedMonths = item.preparedMonths || {};
+  item.preparedMonths[ym] = !item.preparedMonths[ym];
+  if(type==='debt') saveDebts(); else saveRecurring();
+  render();
 }
 function checkMonthlyDebtReminders(){
   // one-time+ongoing cleanup: retire ALL old-format debt reminder tasks (previous versions had
@@ -2007,7 +2279,11 @@ function openRecurringSheet(id){
     <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">אם ממלאים - נזכיר לך באותו יום (אלא אם מסמנים למטה שזה יורד אוטומטית)</div>
     <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
       <input id="recAutomatic" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${r && r.isAutomatic ? 'checked' : ''}>
-      <span>🔁 יורד אוטומטית מהחשבון/הכרטיס (הוראת קבע) - לא צריך תזכורת, רק לחישוב היומי</span>
+      <span>🔁 יורד אוטומטית מהחשבון/הכרטיס (הוראת קבע)</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
+      <input id="recCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${r && r.coveredByExtraIncome ? 'checked' : ''}>
+      <span>🏦 מכוסה מהכנסה נוספת (עמלה וכו') - לא ייכנס ללחץ היעד היומי מנסיעות</span>
     </label>
     <div class="fieldlabel">מספר תשלומים שנותרו (רק אם זו עסקה עם סוף, כמו הלוואה)</div>
     <input id="recInstallments" class="contactinput" style="width:100%; margin-bottom:4px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם זה חיוב קבוע לצמיתות" value="${r && r.installmentsLeft!=null ? r.installmentsLeft : ''}">
@@ -2026,15 +2302,16 @@ function submitRecurring(){
   const dueDayVal = parseInt(document.getElementById('recDueDay').value || '0', 10);
   const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
   const isAutomatic = document.getElementById('recAutomatic').checked;
+  const coveredByExtraIncome = document.getElementById('recCoveredByExtra').checked;
   const installmentsRaw = document.getElementById('recInstallments').value;
   const installmentsLeft = (installmentsRaw!=='' && parseInt(installmentsRaw,10)>=0) ? parseInt(installmentsRaw,10) : null;
   const note = (document.getElementById('recNote').value || '').trim();
   if(!name || !amount || amount<=0) return;
   if(recurringEditTargetId){
     const r = recurringCharges.find(x=>x.id===recurringEditTargetId);
-    if(r){ r.name = name; r.amount = amount; r.dueDay = dueDay; r.note = note; r.installmentsLeft = installmentsLeft; r.isAutomatic = isAutomatic; }
+    if(r){ r.name = name; r.amount = amount; r.dueDay = dueDay; r.note = note; r.installmentsLeft = installmentsLeft; r.isAutomatic = isAutomatic; r.coveredByExtraIncome = coveredByExtraIncome; }
   } else {
-    recurringCharges.push({ id:'rec'+Date.now()+Math.random().toString(36).slice(2,7), name, amount, dueDay, note, installmentsLeft, isAutomatic, createdTs:Date.now() });
+    recurringCharges.push({ id:'rec'+Date.now()+Math.random().toString(36).slice(2,7), name, amount, dueDay, note, installmentsLeft, isAutomatic, coveredByExtraIncome, createdTs:Date.now() });
   }
   saveRecurring();
   recurringEditTargetId = null;
@@ -2202,6 +2479,7 @@ function render(){
     ${entries.length>0 ? `<div class="resetlink" onclick="resetAllData()">🗑️ איפוס כל הנתונים</div>` : ''}
     ${currentUid ? `
       <div class="useremail">מחובר כ-${currentUserEmail}</div>
+      <div class="useremail" style="font-family:'Roboto Mono',monospace; font-size:10px; opacity:.7; margin-top:4px; user-select:all; cursor:text;" title="לחץ לבחירה והעתקה">UID: ${currentUid}</div>
       <div class="logoutlink" onclick="signOutUser()">🚪 התנתקות</div>
     ` : ''}
 
