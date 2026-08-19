@@ -34,7 +34,7 @@
     --divider:#31353b;
   }
   *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
-  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Heebo',sans-serif; overscroll-behavior-y:none;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Heebo',sans-serif; overscroll-behavior-y:none; line-height:1.55;}
   .mono{font-family:'Roboto Mono',monospace;}
   #app{max-width:480px; margin:0 auto; min-height:100vh; padding-bottom:100px; position:relative;}
 
@@ -2706,11 +2706,13 @@ function renderDebtsScreen(){
           const rawDesc = t.description || '';
           const displayName = merchantAliases[rawDesc] || rawDesc;
           const key = bankTxKey(t);
+          const existingTag = bankTxTags[rawDesc] || null;
           return `
           <div class="task" style="margin-bottom:8px; border-color:var(--unpaid); background:var(--unpaid-dim);">
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">🔍 ${escHtml(displayName)}</div>
               <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${!isBankTxApproved(t) ? ` · <span style="color:var(--unpaid); font-weight:700;">עדיין לא אושרה</span>` : ''}</div>
+              ${(existingTag && existingTag.coveredByExtraIncome) ? `<div class="dchips" style="margin-top:8px;"><div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
                 ${!isBankTxApproved(t) ? `<button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(key)}')">✔️ אישור</button>` : ''}
                 <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})">✏️ עריכה</button>
@@ -2749,7 +2751,11 @@ function renderDebtsScreen(){
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">${existingTag && existingTag.type==='recurring' ? '🔁 ' : ''}${escHtml(displayName)}</div>
               <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${existingTag && existingTag.type==='recurring' ? ` · <span style="color:var(--accent);">קבוע כל חודש (הוגדר בעבר)</span>` : ''}</div>
-              ${t.installments ? `<div class="dchips" style="margin-top:8px;"><div class="dchip">💳 תשלום ${t.installments.number} מתוך ${t.installments.total}</div></div>` : ''}
+              ${(t.installments || (existingTag && existingTag.coveredByExtraIncome)) ? `
+              <div class="dchips" style="margin-top:8px;">
+                ${existingTag && existingTag.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
+                ${t.installments ? `<div class="dchip">💳 תשלום ${t.installments.number} מתוך ${t.installments.total}</div>` : ''}
+              </div>` : ''}
               ${(existingTag && existingTag.note) ? `<div class="dnote" style="margin-top:8px;"><span class="ic">📝</span><span>${escHtml(existingTag.note)} <span style="opacity:.6;">(תיאור שכבר הוגדר לעסק הזה)</span></span></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
                 <button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(key)}')">✔️ אישור</button>
@@ -3026,7 +3032,7 @@ function openMerchantAliasSheet(encodedRawDesc, suggestedRemaining){
       <button type="button" id="typeBtnOnetime" class="fuelbtn" style="flex:1;" onclick="selectTxType('onetime')">חד פעמי</button>
       <button type="button" id="typeBtnRecurring" class="fuelbtn" style="flex:1;" onclick="selectTxType('recurring')">🔁 קבוע כל חודש</button>
     </div>
-    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin-bottom:16px;">"קבוע" ייכנס אוטומטית לחישוב "כמה להביא היום", לכל תנועה עתידית עם אותו שם. אם המחיר יעלה בהשוואה לחודש הקודם - נתריע לך.</div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin-bottom:16px; line-height:1.6;">"קבוע" ייכנס אוטומטית לחישוב "כמה להביא היום", לכל תנועה עתידית עם אותו שם. אם המחיר יעלה בהשוואה לחודש הקודם - נתריע לך.</div>
 
     <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:16px; font-size:12.5px; cursor:pointer;">
       <input id="merchantCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${existingTag.coveredByExtraIncome ? 'checked' : ''}>
@@ -3103,7 +3109,7 @@ function openDebtSheet(id){
     <div class="deadlinerow">
       <input id="debtDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="באיזה יום בחודש? (למשל 5)" value="${d && d.dueDay ? d.dueDay : ''}">
     </div>
-    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">אם ממלאים - נזכיר לך יום לפני ובאותו יום, וגם יופיע ישירות על הכרטיס</div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px; line-height:1.6;">אם ממלאים - נזכיר לך יום לפני ובאותו יום, וגם יופיע ישירות על הכרטיס</div>
     <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
       <input id="debtCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${d && d.coveredByExtraIncome ? 'checked' : ''}>
       <span>🏦 החוב הזה מכוסה מהכנסה נוספת (עמלה וכו') - לא ייכנס ללחץ היעד היומי מנסיעות</span>
@@ -3224,7 +3230,7 @@ function openRecurringSheet(id){
     <div class="deadlinerow">
       <input id="recDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="למשל 1" value="${r && r.dueDay ? r.dueDay : ''}">
     </div>
-    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">אם ממלאים - נזכיר לך באותו יום (אלא אם מסמנים למטה שזה יורד אוטומטית)</div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px; line-height:1.6;">אם ממלאים - נזכיר לך באותו יום (אלא אם מסמנים למטה שזה יורד אוטומטית)</div>
     <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
       <input id="recAutomatic" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${r && r.isAutomatic ? 'checked' : ''}>
       <span>🔁 יורד אוטומטית מהחשבון/הכרטיס (הוראת קבע)</span>
@@ -3235,7 +3241,7 @@ function openRecurringSheet(id){
     </label>
     <div class="fieldlabel">מספר תשלומים שנותרו (רק אם זו עסקה עם סוף, כמו הלוואה)</div>
     <input id="recInstallments" class="contactinput" style="width:100%; margin-bottom:4px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם זה חיוב קבוע לצמיתות" value="${r && r.installmentsLeft!=null ? r.installmentsLeft : ''}">
-    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px;">לאחר שתסמנו את התשלום האחרון כ'שולם' - החיוב יפסיק להיספר אוטומטית</div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px; line-height:1.6;">לאחר שתסמנו את התשלום האחרון כ'שולם' - החיוב יפסיק להיספר אוטומטית</div>
     <div class="fieldlabel">הערה (לא חובה)</div>
     <textarea id="recNote" class="noteinput" placeholder="למשל: ביטוח חובה + מקיף לרכב">${r && r.note ? escHtml(r.note) : ''}</textarea>
     <div class="saverow" style="margin-top:4px;">
