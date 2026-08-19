@@ -8,11 +8,16 @@
 // .github/workflows/bank-sync.yml), reading all secrets from environment
 // variables that you set up as encrypted GitHub Secrets. It never receives
 // credentials any other way.
+//
+// It also writes a small "sync status" document each run (success/failure
+// per source, with the error message if any) so the app itself can warn you
+// if a source silently failed, instead of you having to check GitHub Actions.
 
 const { CompanyTypes, createScraper } = require('israeli-bank-scrapers');
 const admin = require('firebase-admin');
 
 const BANK_TRANSACTIONS_KEY = 'banktx_v1';
+const BANK_SYNC_STATUS_KEY = 'banksyncstatus_v1';
 const DAYS_BACK = 35; // how many days of history to pull each run
 
 function requireEnv(name) {
@@ -40,8 +45,9 @@ async function scrapeIsracard() {
   const scraper = createScraper(options);
   const result = await scraper.scrape(credentials);
   if (!result.success) {
-    console.error('Isracard scrape failed:', result.errorType, result.errorMessage);
-    return [];
+    const msg = `${result.errorType || 'GENERIC'}: ${result.errorMessage || 'unknown error'}`;
+    console.error('Isracard scrape failed:', msg);
+    return { txs: [], error: msg };
   }
   const txs = [];
   (result.accounts || []).forEach(acc => {
@@ -57,7 +63,7 @@ async function scrapeIsracard() {
       });
     });
   });
-  return txs;
+  return { txs, error: null };
 }
 
 async function scrapeMax() {
@@ -75,8 +81,9 @@ async function scrapeMax() {
   const scraper = createScraper(options);
   const result = await scraper.scrape(credentials);
   if (!result.success) {
-    console.error('Max scrape failed:', result.errorType, result.errorMessage);
-    return [];
+    const msg = `${result.errorType || 'GENERIC'}: ${result.errorMessage || 'unknown error'}`;
+    console.error('Max scrape failed:', msg);
+    return { txs: [], error: msg };
   }
   const txs = [];
   (result.accounts || []).forEach(acc => {
@@ -92,7 +99,7 @@ async function scrapeMax() {
       });
     });
   });
-  return txs;
+  return { txs, error: null };
 }
 
 async function main() {
@@ -106,20 +113,14 @@ async function main() {
   const db = admin.firestore();
 
   console.log('Scraping Isracard...');
-  const isracardTxs = await scrapeIsracard().catch(e => {
-    console.error('Isracard scrape threw:', e.message);
-    return [];
-  });
-  console.log(`Isracard: ${isracardTxs.length} transactions`);
+  const isracardResult = await scrapeIsracard().catch(e => ({ txs: [], error: e.message }));
+  console.log(`Isracard: ${isracardResult.txs.length} transactions`);
 
   console.log('Scraping Max...');
-  const maxTxs = await scrapeMax().catch(e => {
-    console.error('Max scrape threw:', e.message);
-    return [];
-  });
-  console.log(`Max: ${maxTxs.length} transactions`);
+  const maxResult = await scrapeMax().catch(e => ({ txs: [], error: e.message }));
+  console.log(`Max: ${maxResult.txs.length} transactions`);
 
-  const allTxs = [...isracardTxs, ...maxTxs].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const allTxs = [...isracardResult.txs, ...maxResult.txs].sort((a, b) => new Date(b.date) - new Date(a.date));
 
   const docRef = db.collection('users').doc(uid).collection('data').doc(BANK_TRANSACTIONS_KEY);
   await docRef.set({
@@ -128,6 +129,18 @@ async function main() {
   });
 
   console.log(`Wrote ${allTxs.length} total transactions to Firestore for uid ${uid}.`);
+
+  // Write sync status so the app itself can warn you if a source failed,
+  // even if you never look at this GitHub Actions log.
+  const statusDocRef = db.collection('users').doc(uid).collection('data').doc(BANK_SYNC_STATUS_KEY);
+  await statusDocRef.set({
+    value: JSON.stringify({
+      lastRunAt: Date.now(),
+      isracard: { success: !isracardResult.error, count: isracardResult.txs.length, error: isracardResult.error },
+      max: { success: !maxResult.error, count: maxResult.txs.length, error: maxResult.error },
+    }),
+    updatedAt: Date.now(),
+  });
 }
 
 main().then(() => process.exit(0)).catch(e => {
