@@ -506,6 +506,7 @@ const EXTRA_INCOME_KEY = 'extraincome_v1';
 const BANK_TRANSACTIONS_KEY = 'banktx_v1'; // written externally by the optional bank-sync GitHub Action, read-only here
 const MERCHANT_ALIASES_KEY = 'merchant_aliases_v1'; // maps raw bank description -> friendly name you choose, remembered forever
 const BANK_TX_TAGS_KEY = 'banktxtags_v1'; // maps raw bank description -> {type:'recurring'|'onetime'}, remembered forever
+const BANK_TX_APPROVALS_KEY = 'banktxapprovals_v1'; // maps a stable transaction signature -> true once you've reviewed & approved it
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
 const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
@@ -524,6 +525,7 @@ let extraIncomes = [];
 let bankTransactions = [];
 let merchantAliases = {};
 let bankTxTags = {};
+let bankTxApprovals = {};
 let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
 let debtEditTargetId = null;
 let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
@@ -842,6 +844,11 @@ async function attachFirestoreListeners(){
     render();
     checkBankRecurringPriceIncreases();
   }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(BANK_TX_APPROVALS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    bankTxApprovals = (d && d.value) ? JSON.parse(d.value) : {};
+    render();
+  }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
     const d = doc.data();
     const arr = (d && d.value) ? JSON.parse(d.value) : [];
@@ -902,6 +909,7 @@ async function load(){
   extraIncomes = await storageGet(EXTRA_INCOME_KEY);
   merchantAliases = (await storageGet(MERCHANT_ALIASES_KEY)) || {};
   bankTxTags = (await storageGet(BANK_TX_TAGS_KEY)) || {};
+  bankTxApprovals = (await storageGet(BANK_TX_APPROVALS_KEY)) || {};
   const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
   if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
   workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
@@ -922,6 +930,7 @@ function saveRecurring(){ storageSet(RECURRING_KEY, recurringCharges); }
 function saveExtraIncomes(){ storageSet(EXTRA_INCOME_KEY, extraIncomes); }
 function saveMerchantAliases(){ storageSet(MERCHANT_ALIASES_KEY, merchantAliases); }
 function saveBankTxTags(){ storageSet(BANK_TX_TAGS_KEY, bankTxTags); }
+function saveBankTxApprovals(){ storageSet(BANK_TX_APPROVALS_KEY, bankTxApprovals); }
 function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
 function saveWorkExceptions(){ storageSet(WORK_EXCEPTIONS_KEY, workExceptions); }
 
@@ -1745,14 +1754,31 @@ function debtPaidThisMonthAmount(debtId){
     return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
   }).reduce((s,p)=>s+p.amount, 0);
 }
+function bankTxKey(t){
+  return `${t.source}|${t.date}|${t.description}|${t.amount}`;
+}
+function isBankTxApproved(t){
+  return !!bankTxApprovals[bankTxKey(t)];
+}
+function approveBankTx(encodedKey){
+  const key = decodeURIComponent(encodedKey);
+  bankTxApprovals[key] = true;
+  saveBankTxApprovals();
+  render();
+}
+function approveAllPendingBankTx(){
+  bankTransactions.forEach(t=>{ if(!isBankTxApproved(t)) bankTxApprovals[bankTxKey(t)] = true; });
+  saveBankTxApprovals();
+  render();
+}
 function bankRecurringTotal(){
   const seen = {};
   let total = 0;
-  // walk transactions newest-first, take the latest amount per description tagged 'recurring'
+  // walk transactions newest-first, take the latest APPROVED amount per description tagged 'recurring'
   [...bankTransactions].sort((a,b)=> new Date(b.date) - new Date(a.date)).forEach(t=>{
     const desc = t.description || '';
     const tag = bankTxTags[desc];
-    if(tag && tag.type === 'recurring' && tag.installmentsLeft !== 0 && !seen[desc]){
+    if(tag && tag.type === 'recurring' && tag.installmentsLeft !== 0 && !seen[desc] && isBankTxApproved(t)){
       seen[desc] = true;
       total += Math.abs(Number(t.amount)||0);
     }
@@ -1799,6 +1825,7 @@ function findMatchingBankTransaction(amount){
   const now = Date.now();
   const cutoff = now - 40*86400000; // only recent transactions count as a live match
   return bankTransactions.find(t=>{
+    if(!isBankTxApproved(t)) return false;
     const tTime = new Date(t.date).getTime();
     if(isNaN(tTime) || tTime < cutoff) return false;
     const amtDiff = Math.abs(Math.abs(Number(t.amount)||0) - Number(amount));
@@ -2472,9 +2499,11 @@ async function submitAIQuestion(){
         יורד_אוטומטית: !!r.isAutomatic, מכוסה_מהכנסה_נוספת: !!r.coveredByExtraIncome,
         תשלומים_שנותרו: r.installmentsLeft!=null ? r.installmentsLeft : null
       })),
-      תנועות_אשראי_אחרונות: bankTransactions.slice(0,150).map(t=>({
+      תנועות_אשראי_אחרונות_מאושרות: bankTransactions.filter(isBankTxApproved).slice(0,150).map(t=>({
         תיאור: merchantAliases[t.description] || t.description,
-        מקור: t.source, תאריך: t.date, סכום: t.amount
+        מקור: t.source, תאריך: t.date, סכום: t.amount,
+        סוג: (bankTxTags[t.description] && bankTxTags[t.description].type) || 'לא סווג',
+        הערה: (bankTxTags[t.description] && bankTxTags[t.description].note) || null
       })),
     };
     const systemPrompt = `אתה עוזר פיננסי בתוך אפליקציית ניהול הכנסות והוצאות של נהג בישראל, בשם "המונה שלי". ענה בעברית, בקצרה ובבירור (2-4 משפטים בדרך כלל), אך ורק על סמך הנתונים הבאים בפורמט JSON. אם המידע לא מספיק כדי לענות, תגיד את זה בפירוש ואל תמציא מספרים.\n\nנתונים:\n${JSON.stringify(context)}`;
@@ -2611,17 +2640,57 @@ function renderDebtsScreen(){
     ` : ''}
 
     ${bankTransactions.length>0 ? `
+    ${(()=>{
+      const pending = bankTransactions.filter(t=>!isBankTxApproved(t));
+      if(pending.length===0) return '';
+      return `
+      <div class="dsection">
+        <h3>🕒 ממתינות לאישור שלך</h3>
+        <span class="dcount">${pending.length}</span>
+      </div>
+      <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+        אף תנועה מהאשראי לא נכנסת לתצוגה הרגילה או לחישוב היעד היומי עד שתאשר אותה - כולל תנועות ישנות. זה גם הזמן להוסיף תיאור ולסמן קבוע/חד פעמי; מה שתגדיר לעסק מסוים ייזכר אוטומטית לכל תנועה עתידית שלו.
+      </div>
+      <div class="listwrap" style="margin-top:0;">
+        ${pending.length>1 ? `<div class="addcard" onclick="approveAllPendingBankTx()"><span>✔️</span> אישור כל הממתינות (${pending.length})</div>` : ''}
+        ${pending.map(t=>{
+          const dt = new Date(t.date);
+          const dateStr = dt.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'});
+          const amt = Number(t.amount)||0;
+          const rawDesc = t.description || '';
+          const displayName = merchantAliases[rawDesc] || rawDesc;
+          const existingTag = bankTxTags[rawDesc] || null;
+          return `
+          <div class="task" style="margin-bottom:8px; border-color:#5a3a26;">
+            <div class="taskmid" style="width:100%;">
+              <div class="taskttl">${existingTag && existingTag.type==='recurring' ? '🔁 ' : ''}${escHtml(displayName)}</div>
+              <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${existingTag && existingTag.type==='recurring' ? ` · <span style="color:var(--accent);">קבוע כל חודש (הוגדר בעבר)</span>` : ''}</div>
+              ${(existingTag && existingTag.note) ? `<div class="dnote" style="margin-top:8px;"><span class="ic">📝</span><span>${escHtml(existingTag.note)} <span style="opacity:.6;">(תיאור שכבר הוגדר לעסק הזה)</span></span></div>` : ''}
+              <div class="dactions" style="margin-top:10px;">
+                <button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(bankTxKey(t))}')">✔️ אישור</button>
+                <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}')">✏️ עריכה</button>
+              </div>
+            </div>
+          </div>
+        `;
+        }).join('')}
+      </div>
+      `;
+    })()}
     <div class="dsection">
-      <h3>🏦 תנועות אחרונות מהאשראי (יובא אוטומטית)</h3>
-      <span class="dcount">${bankTransactions.length}</span>
+      <h3>🏦 תנועות אחרונות מהאשראי (מאושרות)</h3>
+      <span class="dcount">${bankTransactions.filter(isBankTxApproved).length}</span>
     </div>
     <div class="listwrap" style="margin-top:0;">
       ${(()=>{
-        // find the most recent transaction id per description so we only show the "latest occurrence"
-        // extras (installments chip / price-change warning) once, not on every historical row
+        // find the most recent transaction id per description WITHIN the visible list, so we only
+        // show the "latest occurrence" extras (note/installments chip/price-change) once per row,
+        // but never hide them just because an even-newer unrelated transaction exists off-screen
+        const visibleTx = bankTransactions.filter(isBankTxApproved).slice(0,20);
         const latestByDesc = {};
-        [...bankTransactions].sort((a,b)=> new Date(a.date) - new Date(b.date)).forEach(t=>{ latestByDesc[t.description||''] = t; });
-        return bankTransactions.slice(0,20).map((t)=>{
+        [...visibleTx].sort((a,b)=> new Date(a.date) - new Date(b.date)).forEach(t=>{ latestByDesc[t.description||''] = t; });
+        if(visibleTx.length===0) return `<div class="empty" style="padding:20px 20px 6px;"><span class="ic">🏦</span>עדיין אין תנועות מאושרות.</div>`;
+        return visibleTx.map((t)=>{
           const dt = new Date(t.date);
           const dateStr = dt.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'});
           const amt = Number(t.amount)||0;
@@ -2634,7 +2703,7 @@ function renderDebtsScreen(){
 
           let priceUpChip = '';
           if(isTaggedRecurring && isLatestForDesc){
-            const sameDesc = bankTransactions.filter(x=>(x.description||'')===rawDesc).sort((a,b)=> new Date(b.date)-new Date(a.date));
+            const sameDesc = bankTransactions.filter(x=>(x.description||'')===rawDesc && isBankTxApproved(x)).sort((a,b)=> new Date(b.date)-new Date(a.date));
             if(sameDesc.length>1){
               const prevAmt = Math.abs(Number(sameDesc[1].amount)||0);
               const curAmt = Math.abs(amt);
