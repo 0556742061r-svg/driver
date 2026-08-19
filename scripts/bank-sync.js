@@ -53,6 +53,7 @@ async function scrapeIsracard() {
         description: t.description,
         amount: t.chargedAmount != null ? t.chargedAmount : t.originalAmount,
         status: t.status,
+        installments: t.installments ? { number: t.installments.number, total: t.installments.total } : null,
       });
     });
   });
@@ -87,6 +88,7 @@ async function scrapeMax() {
         description: t.description,
         amount: t.chargedAmount != null ? t.chargedAmount : t.originalAmount,
         status: t.status,
+        installments: t.installments ? { number: t.installments.number, total: t.installments.total } : null,
       });
     });
   });
