@@ -507,6 +507,7 @@ const BANK_TRANSACTIONS_KEY = 'banktx_v1'; // written externally by the optional
 const MERCHANT_ALIASES_KEY = 'merchant_aliases_v1'; // maps raw bank description -> friendly name you choose, remembered forever
 const BANK_TX_TAGS_KEY = 'banktxtags_v1'; // maps raw bank description -> {type:'recurring'|'onetime'}, remembered forever
 const BANK_TX_APPROVALS_KEY = 'banktxapprovals_v1'; // maps a stable transaction signature -> true once you've reviewed & approved it
+const BANK_TX_FLAGS_KEY = 'banktxflags_v1'; // maps a stable transaction signature -> {status:'suspicious', flaggedAt} - stays until you resolve it
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
 const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
@@ -526,6 +527,7 @@ let bankTransactions = [];
 let merchantAliases = {};
 let bankTxTags = {};
 let bankTxApprovals = {};
+let bankTxFlags = {};
 let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
 let debtEditTargetId = null;
 let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
@@ -849,6 +851,11 @@ async function attachFirestoreListeners(){
     bankTxApprovals = (d && d.value) ? JSON.parse(d.value) : {};
     render();
   }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(BANK_TX_FLAGS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    bankTxFlags = (d && d.value) ? JSON.parse(d.value) : {};
+    render();
+  }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
     const d = doc.data();
     const arr = (d && d.value) ? JSON.parse(d.value) : [];
@@ -910,6 +917,7 @@ async function load(){
   merchantAliases = (await storageGet(MERCHANT_ALIASES_KEY)) || {};
   bankTxTags = (await storageGet(BANK_TX_TAGS_KEY)) || {};
   bankTxApprovals = (await storageGet(BANK_TX_APPROVALS_KEY)) || {};
+  bankTxFlags = (await storageGet(BANK_TX_FLAGS_KEY)) || {};
   const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
   if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
   workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
@@ -931,6 +939,7 @@ function saveExtraIncomes(){ storageSet(EXTRA_INCOME_KEY, extraIncomes); }
 function saveMerchantAliases(){ storageSet(MERCHANT_ALIASES_KEY, merchantAliases); }
 function saveBankTxTags(){ storageSet(BANK_TX_TAGS_KEY, bankTxTags); }
 function saveBankTxApprovals(){ storageSet(BANK_TX_APPROVALS_KEY, bankTxApprovals); }
+function saveBankTxFlags(){ storageSet(BANK_TX_FLAGS_KEY, bankTxFlags); }
 function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
 function saveWorkExceptions(){ storageSet(WORK_EXCEPTIONS_KEY, workExceptions); }
 
@@ -1771,14 +1780,49 @@ function approveAllPendingBankTx(){
   saveBankTxApprovals();
   render();
 }
+function flagBankTxSuspicious(encodedKey, encodedRawDesc, amount, dateStr){
+  const key = decodeURIComponent(encodedKey);
+  const rawDesc = decodeURIComponent(encodedRawDesc);
+  bankTxFlags[key] = { status:'suspicious', flaggedAt: Date.now() };
+  saveBankTxFlags();
+  const displayName = merchantAliases[rawDesc] || rawDesc;
+  const taskId = `bankflag-${key}`;
+  if(!tasks.find(t=>t.id===taskId)){
+    tasks.push({ id:taskId, title:`🔍 לבדוק: ${displayName} · ${fmt(Math.abs(Number(amount)||0))} · ${dateStr}`, deadline:Date.now(), done:false });
+    saveTasks();
+  }
+  render();
+}
+function resolveBankTxFlag(encodedKey){
+  const key = decodeURIComponent(encodedKey);
+  delete bankTxFlags[key];
+  saveBankTxFlags();
+  tasks = tasks.filter(t=>t.id !== `bankflag-${key}`);
+  saveTasks();
+  render();
+}
 function bankRecurringTotal(){
   const seen = {};
   let total = 0;
   // walk transactions newest-first, take the latest APPROVED amount per description tagged 'recurring'
+  // that ISN'T covered by extra income (that portion is excluded - see bankCoveredTotal below)
   [...bankTransactions].sort((a,b)=> new Date(b.date) - new Date(a.date)).forEach(t=>{
     const desc = t.description || '';
     const tag = bankTxTags[desc];
-    if(tag && tag.type === 'recurring' && tag.installmentsLeft !== 0 && !seen[desc] && isBankTxApproved(t)){
+    if(tag && tag.type === 'recurring' && tag.installmentsLeft !== 0 && !tag.coveredByExtraIncome && !seen[desc] && isBankTxApproved(t)){
+      seen[desc] = true;
+      total += Math.abs(Number(t.amount)||0);
+    }
+  });
+  return total;
+}
+function bankCoveredTotal(){
+  const seen = {};
+  let total = 0;
+  [...bankTransactions].sort((a,b)=> new Date(b.date) - new Date(a.date)).forEach(t=>{
+    const desc = t.description || '';
+    const tag = bankTxTags[desc];
+    if(tag && tag.type === 'recurring' && tag.installmentsLeft !== 0 && tag.coveredByExtraIncome && !seen[desc] && isBankTxApproved(t)){
       seen[desc] = true;
       total += Math.abs(Number(t.amount)||0);
     }
@@ -2553,7 +2597,8 @@ function renderDebtsScreen(){
   const stillNeeded = Math.max(0, combinedMonthlyTotal - earnedThisMonth);
   const coveredDebtsTotal = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
   const coveredRecurringTotal = recurringCharges.filter(r=>r.installmentsLeft!==0 && r.coveredByExtraIncome).reduce((s,r)=>s+r.amount, 0);
-  const coveredTotal = coveredDebtsTotal + coveredRecurringTotal;
+  const coveredBankTotal = bankCoveredTotal();
+  const coveredTotal = coveredDebtsTotal + coveredRecurringTotal + coveredBankTotal;
   const upcomingObligations = getUpcomingObligations(14);
   const hasConfirmedIncomeThisMonth = extraIncomes.some(i=>extraIncomeStatusFor(i).status==='received');
   const remainingWorkDays = countRemainingWorkDaysInMonth();
@@ -2643,7 +2688,43 @@ function renderDebtsScreen(){
 
     ${bankTransactions.length>0 ? `
     ${(()=>{
-      const pending = bankTransactions.filter(t=>!isBankTxApproved(t));
+      const flagged = bankTransactions.filter(t=>bankTxFlags[bankTxKey(t)]);
+      if(flagged.length===0) return '';
+      return `
+      <div class="dsection">
+        <h3>🔍 עסקאות בבירור</h3>
+        <span class="dcount">${flagged.length}</span>
+      </div>
+      <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+        נשאר כאן ומזכיר לך עד שתלחץ "טופל" - זה לא נעלם לבד.
+      </div>
+      <div class="listwrap" style="margin-top:0;">
+        ${flagged.map(t=>{
+          const dt = new Date(t.date);
+          const dateStr = dt.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'});
+          const amt = Number(t.amount)||0;
+          const rawDesc = t.description || '';
+          const displayName = merchantAliases[rawDesc] || rawDesc;
+          const key = bankTxKey(t);
+          return `
+          <div class="task" style="margin-bottom:8px; border-color:var(--unpaid); background:var(--unpaid-dim);">
+            <div class="taskmid" style="width:100%;">
+              <div class="taskttl">🔍 ${escHtml(displayName)}</div>
+              <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${!isBankTxApproved(t) ? ` · <span style="color:var(--unpaid); font-weight:700;">עדיין לא אושרה</span>` : ''}</div>
+              <div class="dactions" style="margin-top:10px;">
+                ${!isBankTxApproved(t) ? `<button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(key)}')">✔️ אישור</button>` : ''}
+                <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})">✏️ עריכה</button>
+                <button class="fuelbtn" onclick="resolveBankTxFlag('${encodeURIComponent(key)}')" style="color:var(--paid);">✅ טופל</button>
+              </div>
+            </div>
+          </div>
+        `;
+        }).join('')}
+      </div>
+      `;
+    })()}
+    ${(()=>{
+      const pending = bankTransactions.filter(t=>!isBankTxApproved(t) && !bankTxFlags[bankTxKey(t)]);
       if(pending.length===0) return '';
       return `
       <div class="dsection">
@@ -2662,6 +2743,7 @@ function renderDebtsScreen(){
           const rawDesc = t.description || '';
           const displayName = merchantAliases[rawDesc] || rawDesc;
           const existingTag = bankTxTags[rawDesc] || null;
+          const key = bankTxKey(t);
           return `
           <div class="task" style="margin-bottom:8px; border-color:#5a3a26;">
             <div class="taskmid" style="width:100%;">
@@ -2670,8 +2752,9 @@ function renderDebtsScreen(){
               ${t.installments ? `<div class="dchips" style="margin-top:8px;"><div class="dchip">💳 תשלום ${t.installments.number} מתוך ${t.installments.total}</div></div>` : ''}
               ${(existingTag && existingTag.note) ? `<div class="dnote" style="margin-top:8px;"><span class="ic">📝</span><span>${escHtml(existingTag.note)} <span style="opacity:.6;">(תיאור שכבר הוגדר לעסק הזה)</span></span></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
-                <button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(bankTxKey(t))}')">✔️ אישור</button>
+                <button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(key)}')">✔️ אישור</button>
                 <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})">✏️ עריכה</button>
+                <button class="fuelbtn" onclick="flagBankTxSuspicious('${encodeURIComponent(key)}','${encodeURIComponent(rawDesc)}',${amt},'${dateStr}')" style="color:var(--unpaid);">🔍 בבירור</button>
               </div>
             </div>
           </div>
@@ -2689,7 +2772,7 @@ function renderDebtsScreen(){
         // find the most recent transaction id per description WITHIN the visible list, so we only
         // show the "latest occurrence" extras (note/installments chip/price-change) once per row,
         // but never hide them just because an even-newer unrelated transaction exists off-screen
-        const visibleTx = bankTransactions.filter(isBankTxApproved).slice(0,20);
+        const visibleTx = bankTransactions.filter(t=>isBankTxApproved(t) && !bankTxFlags[bankTxKey(t)]).slice(0,20);
         const latestByDesc = {};
         [...visibleTx].sort((a,b)=> new Date(a.date) - new Date(b.date)).forEach(t=>{ latestByDesc[t.description||''] = t; });
         if(visibleTx.length===0) return `<div class="empty" style="padding:20px 20px 6px;"><span class="ic">🏦</span>עדיין אין תנועות מאושרות.</div>`;
@@ -2721,8 +2804,9 @@ function renderDebtsScreen(){
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">${isTaggedRecurring ? (isFinished?'✅ ':'🔁 ') : ''}${escHtml(displayName)}</div>
               <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${merchantAliases[rawDesc] ? ` · <span style="opacity:.5;">מקורי: ${escHtml(rawDesc)}</span>` : ''}${isTaggedRecurring ? ` · <span style="color:var(--accent);">${isFinished ? 'הסתיים' : 'קבוע כל חודש'}</span>` : ''}</div>
-              ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip || t.installments)) ? `
+              ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip || t.installments || (tag && tag.coveredByExtraIncome))) ? `
               <div class="dchips" style="margin-top:8px;">
+                ${(tag && tag.coveredByExtraIncome) ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
                 ${priceUpChip}
                 ${t.installments ? `<div class="dchip">💳 תשלום ${t.installments.number} מתוך ${t.installments.total}</div>` : ''}
                 ${(tag && tag.installmentsLeft!=null) ? (isFinished
@@ -2733,6 +2817,7 @@ function renderDebtsScreen(){
               <div class="dactions" style="margin-top:10px;">
                 ${(isLatestForDesc && tag && tag.installmentsLeft!=null && !isFinished) ? `<button class="fuelbtn" onclick="markBankTxPaid('${encodeURIComponent(rawDesc)}')">✔️ תשלום זה נגבה</button>` : ''}
                 <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})" style="font-size:13.5px; font-weight:700;">✏️ עריכה</button>
+                <button class="fuelbtn" onclick="flagBankTxSuspicious('${encodeURIComponent(bankTxKey(t))}','${encodeURIComponent(rawDesc)}',${amt},'${dateStr}')" style="color:var(--unpaid);">🔍 בבירור</button>
               </div>
             </div>
           </div>
@@ -2943,6 +3028,11 @@ function openMerchantAliasSheet(encodedRawDesc, suggestedRemaining){
     </div>
     <div style="font-size:10.5px; color:var(--muted); text-align:center; margin-bottom:16px;">"קבוע" ייכנס אוטומטית לחישוב "כמה להביא היום", לכל תנועה עתידית עם אותו שם. אם המחיר יעלה בהשוואה לחודש הקודם - נתריע לך.</div>
 
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:16px; font-size:12.5px; cursor:pointer;">
+      <input id="merchantCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${existingTag.coveredByExtraIncome ? 'checked' : ''}>
+      <span>🏦 מכוסה מהכנסה נוספת (עמלה וכו') - לא ייכנס ללחץ היעד היומי מנסיעות</span>
+    </label>
+
     <div id="installmentsWrap">
       <div class="fieldlabel">מספר תשלומים שנותרו (רק אם יש לזה סוף, כמו הלוואה - השאירו ריק אם זה קבוע לצמיתות)</div>
       <input id="merchantInstallmentsInput" class="contactinput" style="width:100%; margin-bottom:4px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם קבוע לצמיתות" value="${installmentsValue}">
@@ -2977,12 +3067,13 @@ function submitMerchantAlias(encodedRawDesc){
   saveMerchantAliases();
 
   const note = (document.getElementById('merchantNoteInput').value || '').trim();
+  const coveredByExtraIncome = document.getElementById('merchantCoveredByExtra').checked;
   if(currentTxTypeSelection === 'recurring'){
     const installmentsRaw = document.getElementById('merchantInstallmentsInput').value;
     const installmentsLeft = (installmentsRaw!=='' && parseInt(installmentsRaw,10)>=0) ? parseInt(installmentsRaw,10) : null;
-    bankTxTags[rawDesc] = { type:'recurring', note: note || null, installmentsLeft };
-  } else if(note){
-    bankTxTags[rawDesc] = { type:'onetime', note };
+    bankTxTags[rawDesc] = { type:'recurring', note: note || null, installmentsLeft, coveredByExtraIncome };
+  } else if(note || coveredByExtraIncome){
+    bankTxTags[rawDesc] = { type:'onetime', note, coveredByExtraIncome };
   } else {
     delete bankTxTags[rawDesc];
   }
