@@ -361,6 +361,63 @@
   .logoutlink:active{opacity:1;}
   .useremail{text-align:center; font-size:11px; color:var(--muted); margin-top:2px;}
 
+  /* ---- Bank connection wizard screen ---- */
+  .bsw-hero{padding:14px 4px 6px; text-align:center; position:relative;}
+  .bsw-eyebrow{font-size:11px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:8px;}
+  .bsw-hero h1{font-size:20px; font-weight:900; margin:0 0 6px; line-height:1.35;}
+  .bsw-hero p{font-size:12.5px; color:var(--muted); line-height:1.7; max-width:420px; margin:0 auto;}
+  .bsw-timepill{display:inline-flex; align-items:center; gap:6px; margin-top:12px; background:var(--surface2); border:1px solid var(--divider); padding:6px 14px; border-radius:20px; font-size:12px; color:var(--text);}
+
+  .bsw-gaugewrap{display:flex; justify-content:center; margin:20px 0 6px; position:relative;}
+  .bsw-gauge{width:190px; height:190px; position:relative;}
+  .bsw-gauge svg{width:100%; height:100%; transform:rotate(-90deg);}
+  .bsw-gauge .bsw-track{fill:none; stroke:var(--surface2); stroke-width:13;}
+  .bsw-gauge .bsw-fill{fill:none; stroke:var(--accent); stroke-width:13; stroke-linecap:round; transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1); filter:drop-shadow(0 0 6px rgba(244,180,0,.5));}
+  .bsw-gaugecenter{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;}
+  .bsw-gaugecenter .bsw-num{font-family:'Roboto Mono',monospace; font-size:34px; font-weight:700; color:var(--accent); line-height:1;}
+  .bsw-gaugecenter .bsw-num span{font-size:16px; color:var(--muted); font-weight:400;}
+  .bsw-gaugecenter .bsw-lbl{font-size:11px; color:var(--muted); margin-top:6px; letter-spacing:1px;}
+  .bsw-gaugecenter .bsw-done{font-size:13px; color:var(--paid); font-weight:700; margin-top:4px;}
+
+  .bsw-userbox{margin:22px 18px 8px; background:linear-gradient(180deg,var(--surface2),var(--surface)); border-radius:18px; padding:16px 18px; border:1px solid var(--divider);}
+  .bsw-userbox label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:8px;}
+  .bsw-userbox input{width:100%; padding:12px 14px; border-radius:12px; background:var(--surface); border:1px solid var(--divider); color:var(--text); font-family:'Roboto Mono',monospace; font-size:14px; direction:ltr; text-align:right;}
+  .bsw-userbox input:focus{outline:none; border-color:var(--accent);}
+  .bsw-userbox .bsw-hint{font-size:11px; color:var(--muted); margin-top:8px; line-height:1.6;}
+
+  .bsw-sectiontitle{margin:30px 18px 12px; display:flex; align-items:center; gap:10px;}
+  .bsw-sectiontitle .bsw-badge{width:26px; height:26px; border-radius:8px; background:var(--surface2); color:var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Roboto Mono',monospace; font-size:12px; font-weight:700; flex-shrink:0;}
+  .bsw-sectiontitle h2{font-size:14px; font-weight:700; margin:0;}
+  .bsw-sectiontitle .bsw-sub{font-size:11px; color:var(--muted); margin-right:auto;}
+
+  .bsw-stepcard{margin:0 18px 10px; background:var(--surface); border-radius:16px; padding:16px 18px; border:1px solid var(--divider); transition:border-color .3s, background .3s;}
+  .bsw-stepcard.checked{border-color:var(--paid); background:linear-gradient(180deg, var(--paid-dim) 0%, var(--surface) 40%);}
+  .bsw-checkbtn{width:26px; height:26px; border-radius:8px; border:2px solid var(--divider); background:transparent; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; color:transparent; font-size:15px; transition:all .2s; margin-top:1px;}
+  .bsw-checkbtn.on{background:var(--paid); border-color:var(--paid); color:#0d1a14;}
+  .bsw-top{display:flex; align-items:flex-start; gap:12px;}
+  .bsw-body{flex:1; min-width:0;}
+  .bsw-body h3{font-size:14px; font-weight:700; margin:0 0 4px;}
+  .bsw-body p{font-size:12px; color:var(--muted); line-height:1.6; margin:0 0 10px;}
+  .bsw-links{display:flex; flex-wrap:wrap; gap:8px; margin-top:2px;}
+  .bsw-btnlink, .bsw-btncopy{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; padding:9px 14px; border-radius:10px; text-decoration:none; cursor:pointer; border:none; font-family:'Heebo',sans-serif;}
+  .bsw-btnlink{background:var(--accent-dim); color:var(--accent);}
+  .bsw-btnlink.primary{background:var(--accent); color:#241b00;}
+  .bsw-btncopy{background:var(--surface2); color:var(--text); border:1px solid var(--divider);}
+  .bsw-btncopy.copied{background:var(--paid-dim); color:var(--paid); border-color:var(--paid);}
+  .bsw-codebox{margin-top:10px; background:#0e0f12; border-radius:10px; padding:12px 14px; overflow-x:auto; font-family:'Roboto Mono',monospace; font-size:10.5px; color:#c9cdd3; direction:ltr; text-align:left; max-height:120px; overflow-y:auto; border:1px solid var(--divider); white-space:pre;}
+  .bsw-secretname{display:inline-block; font-family:'Roboto Mono',monospace; font-size:12.5px; background:var(--surface2); color:var(--accent); padding:3px 9px; border-radius:6px; margin-bottom:8px;}
+  .bsw-engterm{font-family:'Roboto Mono',monospace; font-size:11px; background:var(--surface); padding:1px 6px; border-radius:5px; color:var(--text); direction:ltr; display:inline-block;}
+
+  .bsw-infobox{margin:16px 18px 8px; background:var(--surface2); border-radius:14px; border:1px solid var(--divider); overflow:hidden;}
+  .bsw-infobox-head{padding:13px 16px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-size:12.5px; font-weight:600; color:var(--accent);}
+  .bsw-infobox-head .bsw-chev{transform:rotate(180deg); transition:transform .25s; font-size:11px; color:var(--muted);}
+  .bsw-infobox.open .bsw-infobox-head .bsw-chev{transform:rotate(0deg);}
+  .bsw-infobox-body{max-height:0; overflow:hidden; transition:max-height .4s ease;}
+  .bsw-infobox.open .bsw-infobox-body{max-height:220px;}
+  .bsw-infobox.open.tall .bsw-infobox-body{max-height:900px;}
+  .bsw-infobox-body p{margin:0; padding:0 16px 14px; font-size:12px; color:var(--muted); line-height:1.7;}
+  .bsw-footer{margin:36px 18px 0; text-align:center; font-size:11px; color:var(--muted); line-height:1.8;}
+
   /* ---- Debts & recurring charges screen ---- */
   .dsection{margin:26px 18px 10px; display:flex; align-items:center; justify-content:space-between;}
   .dsection h3{margin:0; font-size:13.5px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:7px;}
@@ -448,6 +505,7 @@ const RECURRING_KEY = 'recurring_v1';
 const EXTRA_INCOME_KEY = 'extraincome_v1';
 const BANK_TRANSACTIONS_KEY = 'banktx_v1'; // written externally by the optional bank-sync GitHub Action, read-only here
 const MERCHANT_ALIASES_KEY = 'merchant_aliases_v1'; // maps raw bank description -> friendly name you choose, remembered forever
+const BANK_TX_TAGS_KEY = 'banktxtags_v1'; // maps raw bank description -> {type:'recurring'|'onetime'}, remembered forever
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
 const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
@@ -465,7 +523,8 @@ let recurringCharges = [];
 let extraIncomes = [];
 let bankTransactions = [];
 let merchantAliases = {};
-let currentScreen = 'main'; // 'main' | 'debts' | 'ai'
+let bankTxTags = {};
+let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
 let debtEditTargetId = null;
 let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
 let workExceptions = []; // [{date:'YYYY-MM-DD', working:false}] overrides the weekly pattern for a specific date
@@ -770,11 +829,18 @@ async function attachFirestoreListeners(){
     const d = doc.data();
     bankTransactions = (d && d.value) ? JSON.parse(d.value) : [];
     render();
+    checkBankRecurringPriceIncreases();
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(MERCHANT_ALIASES_KEY).onSnapshot(doc=>{
     const d = doc.data();
     merchantAliases = (d && d.value) ? JSON.parse(d.value) : {};
     render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(BANK_TX_TAGS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    bankTxTags = (d && d.value) ? JSON.parse(d.value) : {};
+    render();
+    checkBankRecurringPriceIncreases();
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
     const d = doc.data();
@@ -835,12 +901,14 @@ async function load(){
   recurringCharges = await storageGet(RECURRING_KEY);
   extraIncomes = await storageGet(EXTRA_INCOME_KEY);
   merchantAliases = (await storageGet(MERCHANT_ALIASES_KEY)) || {};
+  bankTxTags = (await storageGet(BANK_TX_TAGS_KEY)) || {};
   const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
   if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
   workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
   render();
   checkMonthlyDebtReminders();
   checkMonthlyRecurringReminders();
+  checkBankRecurringPriceIncreases();
 }
 function save(){ storageSet(STORAGE_KEY, entries); }
 function saveTasks(){ storageSet(TASKS_KEY, tasks); }
@@ -853,6 +921,7 @@ function saveDebtPayments(){ storageSet(DEBT_PAYMENTS_KEY, debtPayments); }
 function saveRecurring(){ storageSet(RECURRING_KEY, recurringCharges); }
 function saveExtraIncomes(){ storageSet(EXTRA_INCOME_KEY, extraIncomes); }
 function saveMerchantAliases(){ storageSet(MERCHANT_ALIASES_KEY, merchantAliases); }
+function saveBankTxTags(){ storageSet(BANK_TX_TAGS_KEY, bankTxTags); }
 function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
 function saveWorkExceptions(){ storageSet(WORK_EXCEPTIONS_KEY, workExceptions); }
 
@@ -1676,6 +1745,66 @@ function debtPaidThisMonthAmount(debtId){
     return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
   }).reduce((s,p)=>s+p.amount, 0);
 }
+function bankRecurringTotal(){
+  const seen = {};
+  let total = 0;
+  // walk transactions newest-first, take the latest amount per description tagged 'recurring'
+  [...bankTransactions].sort((a,b)=> new Date(b.date) - new Date(a.date)).forEach(t=>{
+    const desc = t.description || '';
+    const tag = bankTxTags[desc];
+    if(tag && tag.type === 'recurring' && tag.installmentsLeft !== 0 && !seen[desc]){
+      seen[desc] = true;
+      total += Math.abs(Number(t.amount)||0);
+    }
+  });
+  return total;
+}
+function markBankTxPaid(encodedRawDesc){
+  const rawDesc = decodeURIComponent(encodedRawDesc);
+  const tag = bankTxTags[rawDesc];
+  if(!tag || tag.installmentsLeft == null) return;
+  tag.installmentsLeft = Math.max(0, tag.installmentsLeft - 1);
+  saveBankTxTags();
+  render();
+  if(tag.installmentsLeft === 0) celebrateConfetti();
+}
+function checkBankRecurringPriceIncreases(){
+  const ym = currentYm();
+  const byDesc = {};
+  bankTransactions.forEach(t=>{
+    const desc = t.description || '';
+    if(!bankTxTags[desc] || bankTxTags[desc].type !== 'recurring') return;
+    if(!byDesc[desc]) byDesc[desc] = [];
+    byDesc[desc].push(t);
+  });
+  let changed = false;
+  Object.keys(byDesc).forEach(desc=>{
+    const sorted = byDesc[desc].sort((a,b)=> new Date(b.date) - new Date(a.date));
+    if(sorted.length < 2) return;
+    const latest = Math.abs(Number(sorted[0].amount)||0);
+    const previous = Math.abs(Number(sorted[1].amount)||0);
+    if(latest > previous + 1){
+      const alertId = `bankpriceup-${desc}-${sorted[0].date}`;
+      if(!tasks.find(t=>t.id===alertId)){
+        const displayName = merchantAliases[desc] || desc;
+        tasks.push({ id:alertId, title:`⚠️ המחיר של ${displayName} עלה: ${fmt(previous)} → ${fmt(latest)}`, deadline:Date.now(), done:false });
+        changed = true;
+      }
+    }
+  });
+  if(changed) saveTasks();
+}
+function findMatchingBankTransaction(amount){
+  if(!amount) return null;
+  const now = Date.now();
+  const cutoff = now - 40*86400000; // only recent transactions count as a live match
+  return bankTransactions.find(t=>{
+    const tTime = new Date(t.date).getTime();
+    if(isNaN(tTime) || tTime < cutoff) return false;
+    const amtDiff = Math.abs(Math.abs(Number(t.amount)||0) - Number(amount));
+    return amtDiff < 2; // close enough to be the same recurring charge
+  }) || null;
+}
 function totalRecurringMonthly(){
   return recurringCharges.filter(r=>r.installmentsLeft!==0 && !r.coveredByExtraIncome).reduce((s,r)=>s+r.amount, 0);
 }
@@ -1846,10 +1975,450 @@ function openAIScreen(){
   currentScreen = 'ai';
   render();
 }
+function openBankSetupScreen(){
+  currentScreen = 'banksetup';
+  render();
+}
 function backToMain(){
   currentScreen = 'main';
   render();
 }
+
+// ============ Bank connection wizard (self-serve guide for any driver) ============
+const BSW_FILE1 = `// bank-sync.js
+// Pulls recent transactions from Isracard and Max using the user's own login
+// credentials (via the open-source \`israeli-bank-scrapers\` library), and
+// writes them into the same Firestore document shape that "המונה שלי" uses,
+// so the app can display them read-only.
+//
+// This script is meant to run inside a GitHub Action (see
+// .github/workflows/bank-sync.yml), reading all secrets from environment
+// variables that you set up as encrypted GitHub Secrets. It never receives
+// credentials any other way.
+
+const { CompanyTypes, createScraper } = require('israeli-bank-scrapers');
+const admin = require('firebase-admin');
+
+const BANK_TRANSACTIONS_KEY = 'banktx_v1';
+const DAYS_BACK = 35; // how many days of history to pull each run
+
+function requireEnv(name) {
+  const v = process.env[name];
+  if (!v) {
+    console.error(\`Missing required environment variable: \${name}\`);
+    process.exit(1);
+  }
+  return v;
+}
+
+async function scrapeIsracard() {
+  const options = {
+    companyId: CompanyTypes.isracard,
+    startDate: new Date(Date.now() - DAYS_BACK * 86400000),
+    combineInstallments: false,
+    showBrowser: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  };
+  const credentials = {
+    id: requireEnv('ISRACARD_ID'),
+    password: requireEnv('ISRACARD_PASSWORD'),
+    card6Digits: requireEnv('ISRACARD_CARD6DIGITS'),
+  };
+  const scraper = createScraper(options);
+  const result = await scraper.scrape(credentials);
+  if (!result.success) {
+    console.error('Isracard scrape failed:', result.errorType, result.errorMessage);
+    return [];
+  }
+  const txs = [];
+  (result.accounts || []).forEach(acc => {
+    (acc.txns || []).forEach(t => {
+      txs.push({
+        source: 'isracard',
+        account: acc.accountNumber,
+        date: t.date,
+        description: t.description,
+        amount: t.chargedAmount != null ? t.chargedAmount : t.originalAmount,
+        status: t.status,
+      });
+    });
+  });
+  return txs;
+}
+
+async function scrapeMax() {
+  const options = {
+    companyId: CompanyTypes.max,
+    startDate: new Date(Date.now() - DAYS_BACK * 86400000),
+    combineInstallments: false,
+    showBrowser: false,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  };
+  const credentials = {
+    username: requireEnv('MAX_USERNAME'),
+    password: requireEnv('MAX_PASSWORD'),
+  };
+  const scraper = createScraper(options);
+  const result = await scraper.scrape(credentials);
+  if (!result.success) {
+    console.error('Max scrape failed:', result.errorType, result.errorMessage);
+    return [];
+  }
+  const txs = [];
+  (result.accounts || []).forEach(acc => {
+    (acc.txns || []).forEach(t => {
+      txs.push({
+        source: 'max',
+        account: acc.accountNumber,
+        date: t.date,
+        description: t.description,
+        amount: t.chargedAmount != null ? t.chargedAmount : t.originalAmount,
+        status: t.status,
+      });
+    });
+  });
+  return txs;
+}
+
+async function main() {
+  const uid = requireEnv('FIREBASE_UID');
+  const serviceAccountJson = requireEnv('FIREBASE_SERVICE_ACCOUNT');
+  const serviceAccount = JSON.parse(serviceAccountJson);
+
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+  const db = admin.firestore();
+
+  console.log('Scraping Isracard...');
+  const isracardTxs = await scrapeIsracard().catch(e => {
+    console.error('Isracard scrape threw:', e.message);
+    return [];
+  });
+  console.log(\`Isracard: \${isracardTxs.length} transactions\`);
+
+  console.log('Scraping Max...');
+  const maxTxs = await scrapeMax().catch(e => {
+    console.error('Max scrape threw:', e.message);
+    return [];
+  });
+  console.log(\`Max: \${maxTxs.length} transactions\`);
+
+  const allTxs = [...isracardTxs, ...maxTxs].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const docRef = db.collection('users').doc(uid).collection('data').doc(BANK_TRANSACTIONS_KEY);
+  await docRef.set({
+    value: JSON.stringify(allTxs),
+    updatedAt: Date.now(),
+  });
+
+  console.log(\`Wrote \${allTxs.length} total transactions to Firestore for uid \${uid}.\`);
+}
+
+main().then(() => process.exit(0)).catch(e => {
+  console.error('bank-sync failed:', e);
+  process.exit(1);
+});
+`;
+
+const BSW_FILE2 = `{
+  "name": "bank-sync",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Pulls Isracard/Max transactions into Firestore for המונה שלי",
+  "main": "bank-sync.js",
+  "scripts": {
+    "start": "node bank-sync.js"
+  },
+  "dependencies": {
+    "israeli-bank-scrapers": "^6.7.3",
+    "firebase-admin": "^12.1.0"
+  }
+}
+`;
+
+const BSW_FILE3 = `name: Bank Sync
+
+on:
+  schedule:
+    # Runs daily at 05:00 UTC (≈ 07:00/08:00 Israel time depending on DST)
+    - cron: '0 5 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: scripts
+        run: npm install
+
+      - name: Run bank sync
+        working-directory: scripts
+        env:
+          ISRACARD_ID: \${{ secrets.ISRACARD_ID }}
+          ISRACARD_PASSWORD: \${{ secrets.ISRACARD_PASSWORD }}
+          ISRACARD_CARD6DIGITS: \${{ secrets.ISRACARD_CARD6DIGITS }}
+          MAX_USERNAME: \${{ secrets.MAX_USERNAME }}
+          MAX_PASSWORD: \${{ secrets.MAX_PASSWORD }}
+          FIREBASE_SERVICE_ACCOUNT: \${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          FIREBASE_UID: \${{ secrets.FIREBASE_UID }}
+        run: node bank-sync.js
+`;
+
+const BSW_STEPS = ['fork','pages','file1','file2','file3','s1','s2','s3','s4','s5','s6','s7','run'];
+const BSW_TOTAL = BSW_STEPS.length;
+const BSW_CIRC = 2 * Math.PI * 82;
+
+function bswGetUsername(){ return (localStorage.getItem('bsw_username') || '').trim(); }
+function bswSetUsername(u){ localStorage.setItem('bsw_username', u); }
+function bswGetChecked(){ try{ return JSON.parse(localStorage.getItem('bsw_checked') || '{}'); }catch(e){ return {}; } }
+function bswSetChecked(obj){ localStorage.setItem('bsw_checked', JSON.stringify(obj)); }
+
+function bswOnUsernameInput(val){
+  bswSetUsername(val);
+  bswUpdateLinks();
+}
+function bswUpdateLinks(){
+  const u = bswGetUsername() || 'YOUR-USERNAME';
+  const repo = `${u}/driver`;
+  const set = (id, href) => { const el = document.getElementById(id); if(el) el.href = href; };
+  set('bswLnkPages', `https://github.com/${repo}/settings/pages`);
+  set('bswLnkFile1', `https://github.com/${repo}/new/main?filename=scripts/bank-sync.js`);
+  set('bswLnkFile2', `https://github.com/${repo}/new/main?filename=scripts/package.json`);
+  set('bswLnkFile3', `https://github.com/${repo}/new/main?filename=.github/workflows/bank-sync.yml`);
+  for(let i=1;i<=7;i++) set('bswLnkSecrets'+i, `https://github.com/${repo}/settings/secrets/actions`);
+  set('bswLnkRun', `https://github.com/${repo}/actions/workflows/bank-sync.yml`);
+}
+function bswToggleCheck(key){
+  const checked = bswGetChecked();
+  checked[key] = !checked[key];
+  bswSetChecked(checked);
+  bswUpdateGauge();
+}
+function bswUpdateGauge(){
+  const checked = bswGetChecked();
+  const count = BSW_STEPS.filter(s => checked[s]).length;
+  const numEl = document.getElementById('bswGaugeNum');
+  if(numEl) numEl.innerHTML = count + '<span>/'+BSW_TOTAL+'</span>';
+  const fillEl = document.getElementById('bswGaugeFill');
+  if(fillEl) fillEl.style.strokeDashoffset = BSW_CIRC - (BSW_CIRC * count / BSW_TOTAL);
+  const doneEl = document.getElementById('bswGaugeDone');
+  if(doneEl) doneEl.style.display = (count === BSW_TOTAL) ? 'block' : 'none';
+  BSW_STEPS.forEach(s => {
+    const btn = document.querySelector(`[data-bswcheck="${s}"]`);
+    const card = document.querySelector(`[data-bswstep="${s}"]`);
+    if(btn){ btn.classList.toggle('on', !!checked[s]); btn.textContent = checked[s] ? '✓' : ''; }
+    if(card){ card.classList.toggle('checked', !!checked[s]); }
+  });
+}
+async function bswCopyCode(srcId, btn){
+  const text = document.getElementById(srcId).textContent;
+  try{
+    await navigator.clipboard.writeText(text);
+    btn.textContent = '✓ הועתק';
+    btn.classList.add('copied');
+    setTimeout(()=>{ btn.textContent = '📋 העתקה'; btn.classList.remove('copied'); }, 1800);
+  }catch(e){
+    alert('לא הצלחתי להעתיק אוטומטית - סמן ידנית והעתק.');
+  }
+}
+function bswToggleInfo(id, tall){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.classList.toggle('open');
+  if(tall) el.classList.toggle('tall');
+}
+
+function renderBankSetupScreen(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <header>
+      <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
+    </header>
+
+    <div class="bsw-hero">
+      <div class="bsw-eyebrow">המונה שלי · אפליקציית ההכנסות וההוצאות שלך</div>
+      <h1>תוך כ-4 דקות, "המונה שלי" 🚕<br>יתחיל למשוך אוטומטית מהאשראי שלך</h1>
+      <p>לא צריך להבין אנגלית ולא צריך להבין בתכנות. בכל שלב רק מעתיקים-מדביקים או לוחצים על כפתור.</p>
+      <p style="margin-top:10px;">התהליך רץ לגמרי בתוך <b>חשבון אישי משלך</b> באתר בשם GitHub (חינמי). אף אחד — לא אנחנו, לא מפתחי האפליקציה — לא רואה את הסיסמאות שלך בשום שלב.</p>
+      <div class="bsw-timepill">⏱️ כ-4 דקות · 13 שלבים קצרים</div>
+    </div>
+
+    <div class="bsw-infobox" id="bswWhatIsGithub">
+      <div class="bsw-infobox-head" onclick="bswToggleInfo('bswWhatIsGithub')">
+        <span>❓ מה זה בכלל GitHub? (30 שניות הסבר)</span>
+        <span class="bsw-chev">︿</span>
+      </div>
+      <div class="bsw-infobox-body">
+        <p><b>GitHub</b> הוא ארון אחסון דיגיטלי בחינם, שבו "המונה שלי" שלך יושב. כשעושים <span class="bsw-engterm">Fork</span> (=עותק אישי) — זה כמו לצלם את כל האפליקציה ולשמור לעצמך עותק, שרק אתה שולט בו. כל מילה באנגלית באתר של GitHub עצמו (כי האתר שלהם רק באנגלית) תוסבר כאן בעברית לצידה.</p>
+      </div>
+    </div>
+
+    <div class="bsw-gaugewrap">
+      <div class="bsw-gauge">
+        <svg viewBox="0 0 190 190">
+          <circle class="bsw-track" cx="95" cy="95" r="82"></circle>
+          <circle class="bsw-fill" id="bswGaugeFill" cx="95" cy="95" r="82" stroke-dasharray="${BSW_CIRC}" stroke-dashoffset="${BSW_CIRC}"></circle>
+        </svg>
+        <div class="bsw-gaugecenter">
+          <div class="bsw-num" id="bswGaugeNum">0<span>/${BSW_TOTAL}</span></div>
+          <div class="bsw-lbl">שלבים הושלמו</div>
+          <div class="bsw-done" id="bswGaugeDone" style="display:none;">🎉 מחובר!</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bsw-userbox">
+      <label>שם המשתמש שלך בגיטהאב (כדי שנבנה לך את הקישורים המדויקים)</label>
+      <input id="bswUsername" type="text" placeholder="your-github-username" autocapitalize="off" autocorrect="off" spellcheck="false" value="${escHtml(bswGetUsername())}" oninput="bswOnUsernameInput(this.value)">
+      <div class="bsw-hint">לא יודע מה זה? תלמד בשלב 1 למטה — תקבל שם משתמש כשתפתח חשבון.</div>
+    </div>
+
+    <div class="bsw-sectiontitle"><div class="bsw-badge">1</div><h2>עותק פרטי משלך</h2></div>
+    <div class="bsw-stepcard" data-bswstep="fork">
+      <div class="bsw-top">
+        <button class="bsw-checkbtn" data-bswcheck="fork" onclick="bswToggleCheck('fork')">✓</button>
+        <div class="bsw-body">
+          <h3>תפתח חשבון (אם עוד אין לך) ותלחץ על <span class="bsw-engterm">Fork</span></h3>
+          <p><span class="bsw-engterm">Fork</span> (=עותק אישי) יוצר לך העתק מלא של האפליקציה, בבעלותך המלאה — כולל אתר משלך. אם אין לך חשבון עדיין, הכפתור הראשון ייקח אותך להרשמה חינמית (2 דקות).</p>
+          <div class="bsw-links">
+            <a class="bsw-btnlink primary" href="https://github.com/signup" target="_blank" rel="noopener">📝 פתיחת חשבון (חינם)</a>
+            <a class="bsw-btnlink" href="https://github.com/0556742061r-svg/driver/fork" target="_blank" rel="noopener">🍴 העתקה לחשבון שלי (Fork)</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bsw-sectiontitle"><div class="bsw-badge">2</div><h2>הפעלת האתר שלך</h2></div>
+    <div class="bsw-stepcard" data-bswstep="pages">
+      <div class="bsw-top">
+        <button class="bsw-checkbtn" data-bswcheck="pages" onclick="bswToggleCheck('pages')">✓</button>
+        <div class="bsw-body">
+          <h3>בעמוד שנפתח, תוודא שכתוב "main" ותלחץ Save</h3>
+          <p><span class="bsw-engterm">Save</span> = שמירה. זה מפעיל את הכתובת הציבורית של האפליקציה שלך.</p>
+          <div class="bsw-links"><a class="bsw-btnlink" id="bswLnkPages" href="#" target="_blank" rel="noopener">⚙️ פתיחת עמוד ההפעלה</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bsw-sectiontitle"><div class="bsw-badge">3-5</div><h2>שלושה קבצי הפעלה</h2><span class="bsw-sub">מדביקים, לא כותבים</span></div>
+
+    <div class="bsw-stepcard" data-bswstep="file1">
+      <div class="bsw-top">
+        <button class="bsw-checkbtn" data-bswcheck="file1" onclick="bswToggleCheck('file1')">✓</button>
+        <div class="bsw-body">
+          <h3>הקובץ הראשון — סקריפט המשיכה עצמו</h3>
+          <p>תלחץ "העתקה", תלחץ "יצירת הקובץ", תדביק, ותלחץ בסוף על הכפתור הירוק <span class="bsw-engterm">Commit changes</span> (=שמירה).</p>
+          <div class="bsw-codebox" id="bswCodeFile1">${escHtml(BSW_FILE1)}</div>
+          <div class="bsw-links">
+            <button class="bsw-btncopy" onclick="bswCopyCode('bswCodeFile1', this)">📋 העתקה</button>
+            <a class="bsw-btnlink primary" id="bswLnkFile1" href="#" target="_blank" rel="noopener">➕ יצירת הקובץ</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bsw-stepcard" data-bswstep="file2">
+      <div class="bsw-top">
+        <button class="bsw-checkbtn" data-bswcheck="file2" onclick="bswToggleCheck('file2')">✓</button>
+        <div class="bsw-body">
+          <h3>הקובץ השני — רשימת התוכנות הדרושות</h3>
+          <p>אותו תהליך בדיוק: העתקה → יצירת הקובץ → הדבקה → <span class="bsw-engterm">Commit changes</span> (שמירה).</p>
+          <div class="bsw-codebox" id="bswCodeFile2">${escHtml(BSW_FILE2)}</div>
+          <div class="bsw-links">
+            <button class="bsw-btncopy" onclick="bswCopyCode('bswCodeFile2', this)">📋 העתקה</button>
+            <a class="bsw-btnlink primary" id="bswLnkFile2" href="#" target="_blank" rel="noopener">➕ יצירת הקובץ</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bsw-stepcard" data-bswstep="file3">
+      <div class="bsw-top">
+        <button class="bsw-checkbtn" data-bswcheck="file3" onclick="bswToggleCheck('file3')">✓</button>
+        <div class="bsw-body">
+          <h3>הקובץ השלישי — מריץ הכל אוטומטית כל בוקר</h3>
+          <p>אותו תהליך שוב: העתקה → יצירת הקובץ → הדבקה → <span class="bsw-engterm">Commit changes</span> (שמירה).</p>
+          <div class="bsw-codebox" id="bswCodeFile3">${escHtml(BSW_FILE3)}</div>
+          <div class="bsw-links">
+            <button class="bsw-btncopy" onclick="bswCopyCode('bswCodeFile3', this)">📋 העתקה</button>
+            <a class="bsw-btnlink primary" id="bswLnkFile3" href="#" target="_blank" rel="noopener">➕ יצירת הקובץ</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bsw-sectiontitle"><div class="bsw-badge">6-12</div><h2>כספת דיגיטלית לסיסמאות</h2><span class="bsw-sub">7 ערכים</span></div>
+    <div class="bsw-stepcard">
+      <p style="margin:0; font-size:12px; color:var(--muted); line-height:1.7;">בעמוד שנפתח יש כפתור ירוק בשם <span class="bsw-engterm">New repository secret</span> (=סוד חדש). לכל שורה למטה: תלחץ עליו, בתיבה <span class="bsw-engterm">Name</span> (=שם) תמלא בדיוק את מה שכתוב, בתיבה <span class="bsw-engterm">Secret</span> (=סוד) תמלא את הערך, ותלחץ <span class="bsw-engterm">Add secret</span> (=הוספה). זה מוצפן — גם אנחנו לא יכולים לראות את מה שתזין.</p>
+    </div>
+
+    ${[
+      ['s1','ISRACARD_ID','תעודת הזהות שאיתה אתה מתחבר לישראכרט.'],
+      ['s2','ISRACARD_PASSWORD','הסיסמה שלך לישראכרט.'],
+      ['s3','ISRACARD_CARD6DIGITS','6 הספרות האחרונות של כרטיס האשראי.'],
+      ['s4','MAX_USERNAME','שם המשתמש שלך במקס (Max).'],
+      ['s5','MAX_PASSWORD','הסיסמה שלך במקס.'],
+      ['s6','FIREBASE_UID','פתח את "המונה שלי" שלך → תפריט → תמצא שורה שמתחילה ב-"UID:" → תעתיק אותה.'],
+      ['s7','FIREBASE_SERVICE_ACCOUNT','ב-Firebase Console של הפרויקט שלך → Project Settings → Service Accounts → "Generate new private key" → תעתיק את <b>כל</b> תוכן קובץ ה-JSON שיורד.'],
+    ].map(([key,name,desc],i)=>`
+    <div class="bsw-stepcard" data-bswstep="${key}">
+      <div class="bsw-top">
+        <button class="bsw-checkbtn" data-bswcheck="${key}" onclick="bswToggleCheck('${key}')">✓</button>
+        <div class="bsw-body">
+          <div class="bsw-secretname">${name}</div>
+          <p>${desc}</p>
+          <div class="bsw-links"><a class="bsw-btnlink" id="bswLnkSecrets${i+1}" href="#" target="_blank" rel="noopener">🔐 פתיחת הכספת</a></div>
+        </div>
+      </div>
+    </div>`).join('')}
+
+    <div class="bsw-sectiontitle"><div class="bsw-badge">13</div><h2>בדיקה ראשונה</h2></div>
+    <div class="bsw-stepcard" data-bswstep="run">
+      <div class="bsw-top">
+        <button class="bsw-checkbtn" data-bswcheck="run" onclick="bswToggleCheck('run')">✓</button>
+        <div class="bsw-body">
+          <h3>תלחץ Actions, אחר כך "Bank Sync", אחר כך הכפתור "Run workflow"</h3>
+          <p>תוך כדקה תראה עיגול ירוק ✅. אחר כך זה ירוץ לבד כל בוקר — לא תצטרך לגעת בזה שוב.</p>
+          <div class="bsw-links"><a class="bsw-btnlink primary" id="bswLnkRun" href="#" target="_blank" rel="noopener">▶️ פתיחת הבדיקה</a></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="bsw-sectiontitle"><div class="bsw-badge">?</div><h2>אם הבדיקה נכשלת</h2></div>
+    <div class="bsw-infobox" id="bswTroubleshoot">
+      <div class="bsw-infobox-head" onclick="bswToggleInfo('bswTroubleshoot', true)">
+        <span>🔧 מה עושים אם רואים ❌ אדום, או ✅ ירוק אבל בלי תנועות?</span>
+        <span class="bsw-chev">︿</span>
+      </div>
+      <div class="bsw-infobox-body">
+        <p style="padding-top:0;"><b>איך בודקים מה בדיוק קרה:</b> ב-<span class="bsw-engterm">Actions</span> תלחץ על הריצה שהסתיימה → תלחץ על "sync" → תלחץ על "Run bank sync" → יפתח טקסט. תחפש בו שורות עם המילה <span class="bsw-engterm">transactions</span>.</p>
+        <p><b>"INVALID_PASSWORD" ליד ישראכרט או מקס</b><br>הכי נפוץ. הסיסמה/תעודת הזהות שגויות או התחלפו. פתרון: תחזור לכספת, ✏️ ליד הסוד המתאים, תזין מחדש, <span class="bsw-engterm">Update secret</span>, ותריץ שוב.</p>
+        <p><b>הריצה ירוקה ✅ אבל כתוב "0 transactions"</b><br>כמעט תמיד אותה סיבה כמו למעלה. תעדכן ותריץ שוב.</p>
+        <p><b>הבנק מבקש קוד אימות SMS</b><br>חלק מהבנקים דורשים קוד בכניסה ראשונה ממכשיר "חדש". אם זה קורה, תגיד לנו איזה בנק ונבדוק פתרון.</p>
+        <p style="margin-bottom:0;"><b>חשוב לזכור:</b> אף תקלה כאן לא מסכנת כסף או נתונים - במקרה הגרוע ביותר, פשוט לא ימשכו תנועות עד שהפרט השגוי יתוקן.</p>
+      </div>
+    </div>
+
+    <div class="bsw-footer">
+      כל הפרטים שלך נשארים בחשבון הגיטהאב האישי שלך בלבד.<br>
+      תקוע באמצע? תשאל בעמוד "🤖 שאל את המונה שלי".
+    </div>
+  `;
+  bswUpdateLinks();
+  bswUpdateGauge();
+}
+// ============ end bank connection wizard ============
 
 let aiChatHistory = []; // [{role:'user'|'assistant', text:'...'}] - session only, not persisted
 let aiIsThinking = false;
@@ -1947,7 +2516,8 @@ function renderDebtsScreen(){
   // raises the required amount for the remaining days - no manual tracking needed.
   const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && !d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
   const recurringTotal = totalRecurringMonthly();
-  const combinedMonthlyTotal = monthlyDebtTarget + recurringTotal;
+  const bankRecurring = bankRecurringTotal();
+  const combinedMonthlyTotal = monthlyDebtTarget + recurringTotal + bankRecurring;
   const earnedThisMonth = totalNetEarnedThisMonth();
   const stillNeeded = Math.max(0, combinedMonthlyTotal - earnedThisMonth);
   const coveredDebtsTotal = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
@@ -1991,6 +2561,7 @@ function renderDebtsScreen(){
       <div class="targetbreak">
         ${monthlyDebtTarget>0 ? `<div class="targetbreakrow"><span>🤝 סה"כ החזרי חובות לחודש</span><b>${fmt(monthlyDebtTarget)}</b></div>` : ''}
         ${recurringTotal>0 ? `<div class="targetbreakrow"><span>📌 סה"כ הוצאות קבועות לחודש</span><b>${fmt(recurringTotal)}</b></div>` : ''}
+        ${bankRecurring>0 ? `<div class="targetbreakrow"><span>💳 חיובים קבועים מזוהים באשראי</span><b>${fmt(bankRecurring)}</b></div>` : ''}
         <div class="targetbreakrow"><span>💵 הרווחת החודש</span><b>${fmt(earnedThisMonth)}</b></div>
         <div class="targetbreakrow"><span>📆 ימי עבודה שנשארו החודש</span><b>${remainingWorkDays}</b></div>
       </div>
@@ -2045,21 +2616,56 @@ function renderDebtsScreen(){
       <span class="dcount">${bankTransactions.length}</span>
     </div>
     <div class="listwrap" style="margin-top:0;">
-      ${bankTransactions.slice(0,20).map((t,idx)=>{
-        const dt = new Date(t.date);
-        const dateStr = dt.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'});
-        const amt = Number(t.amount)||0;
-        const rawDesc = t.description || '';
-        const displayName = merchantAliases[rawDesc] || rawDesc;
-        return `
-        <div class="task ok" style="margin-bottom:8px; cursor:pointer;" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}')">
-          <div class="taskmid" style="width:100%;">
-            <div class="taskttl">${escHtml(displayName)} <span style="opacity:.5; font-size:11px;">✏️</span></div>
-            <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${merchantAliases[rawDesc] ? ` · <span style="opacity:.5;">מקורי: ${escHtml(rawDesc)}</span>` : ''}</div>
+      ${(()=>{
+        // find the most recent transaction id per description so we only show the "latest occurrence"
+        // extras (installments chip / price-change warning) once, not on every historical row
+        const latestByDesc = {};
+        [...bankTransactions].sort((a,b)=> new Date(a.date) - new Date(b.date)).forEach(t=>{ latestByDesc[t.description||''] = t; });
+        return bankTransactions.slice(0,20).map((t)=>{
+          const dt = new Date(t.date);
+          const dateStr = dt.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'});
+          const amt = Number(t.amount)||0;
+          const rawDesc = t.description || '';
+          const displayName = merchantAliases[rawDesc] || rawDesc;
+          const tag = bankTxTags[rawDesc] || null;
+          const isTaggedRecurring = tag && tag.type === 'recurring';
+          const isLatestForDesc = latestByDesc[rawDesc] === t;
+          const isFinished = isTaggedRecurring && tag.installmentsLeft === 0;
+
+          let priceUpChip = '';
+          if(isTaggedRecurring && isLatestForDesc){
+            const sameDesc = bankTransactions.filter(x=>(x.description||'')===rawDesc).sort((a,b)=> new Date(b.date)-new Date(a.date));
+            if(sameDesc.length>1){
+              const prevAmt = Math.abs(Number(sameDesc[1].amount)||0);
+              const curAmt = Math.abs(amt);
+              if(curAmt > prevAmt + 1){
+                priceUpChip = `<div class="dchip overdue">⚠️ עלה מ-${fmt(prevAmt)} ל-${fmt(curAmt)}</div>`;
+              }
+            }
+          }
+
+          return `
+          <div class="task ok" style="margin-bottom:8px;">
+            <div class="taskmid" style="width:100%;">
+              <div class="taskttl">${isTaggedRecurring ? (isFinished?'✅ ':'🔁 ') : ''}${escHtml(displayName)}</div>
+              <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${merchantAliases[rawDesc] ? ` · <span style="opacity:.5;">מקורי: ${escHtml(rawDesc)}</span>` : ''}${isTaggedRecurring ? ` · <span style="color:var(--accent);">${isFinished ? 'הסתיים' : 'קבוע כל חודש'}</span>` : ''}</div>
+              ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip)) ? `
+              <div class="dchips" style="margin-top:8px;">
+                ${priceUpChip}
+                ${(tag && tag.installmentsLeft!=null) ? (isFinished
+                    ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ הסתיים</div>`
+                    : `<div class="dchip">🔢 נשארו ${tag.installmentsLeft} תשלומים</div>`) : ''}
+              </div>` : ''}
+              ${(isLatestForDesc && tag && tag.note) ? `<div class="dnote" style="margin-top:8px;"><span class="ic">📝</span><span>${escHtml(tag.note)}</span></div>` : ''}
+              <div class="dactions" style="margin-top:10px;">
+                ${(isLatestForDesc && tag && tag.installmentsLeft!=null && !isFinished) ? `<button class="fuelbtn" onclick="markBankTxPaid('${encodeURIComponent(rawDesc)}')">✔️ תשלום זה נגבה</button>` : ''}
+                <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}')" style="font-size:13.5px; font-weight:700;">✏️ עריכה</button>
+              </div>
+            </div>
           </div>
-        </div>
-      `;
-      }).join('')}
+        `;
+        }).join('');
+      })()}
     </div>
     ` : ''}
 
@@ -2139,6 +2745,7 @@ function renderDebtsScreen(){
       ${sortedRecurring.length===0 ? '' : sortedRecurring.map(r=>{
         const isPastDue = r.dueDay && todayDate > r.dueDay;
         const isFinished = r.installmentsLeft === 0;
+        const bankMatch = (!isFinished && !r.coveredByExtraIncome) ? findMatchingBankTransaction(r.amount) : null;
         return `
         <div class="dcard ${isFinished?'done':''}">
           <div class="dcardtop">
@@ -2156,6 +2763,11 @@ function renderDebtsScreen(){
             ${r.installmentsLeft!=null ? (isFinished
                 ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ העסקה הסתיימה</div>`
                 : `<div class="dchip">🔢 נשארו ${r.installmentsLeft} תשלומים</div>`) : ''}
+          </div>` : ''}
+          ${bankMatch ? `
+          <div class="dnote" style="background:var(--accent-dim); color:var(--accent);">
+            <span class="ic">🔗</span>
+            <span>נמצאה תנועה תואמת מ${bankMatch.source==='isracard'?'ישראכרט':'מקס'} על ${fmt(Math.abs(Number(bankMatch.amount)||0))} - ${r.isAutomatic ? 'מאושר: זה באמת יורד אוטומטית מהאשראי המחובר.' : 'אפשר עכשיו למחוק את הרשומה הידנית הזו בבטחה: פשוט תסמן את התנועה המתאימה למטה בסקשן "תנועות אחרונות מהאשראי" כ-"קבוע כל חודש" - היא תמשיך להיכנס לחישוב היעד היומי אוטומטית, בלי צורך ברשומה כפולה.'}</span>
           </div>` : ''}
           ${r.note ? `<div class="dnote"><span class="ic">📝</span><span>${escHtml(r.note)}</span></div>` : ''}
           <div class="dactions">
@@ -2240,25 +2852,69 @@ function openMerchantAliasSheet(encodedRawDesc){
   document.getElementById('overlay').classList.add('open');
   const sheet = document.getElementById('sheet');
   const current = merchantAliases[rawDesc] || '';
+  const existingTag = bankTxTags[rawDesc] || {};
+  const currentType = existingTag.type || 'onetime';
   sheet.innerHTML = `
-    <h2>✏️ שינוי שם עסק</h2>
+    <h2>✏️ עריכת תנועה</h2>
     <div style="font-size:11.5px; color:var(--muted); text-align:center; margin-bottom:10px;">שם מקורי מהאשראי: "${escHtml(rawDesc)}"</div>
     <input id="merchantAliasInput" class="contactinput" style="width:100%; margin-bottom:14px;" type="text" placeholder="שם ברור שאתה תרצה לראות" value="${escHtml(current)}">
-    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin-bottom:12px;">ייזכר לתמיד לכל תנועה עתידית עם השם המקורי הזה</div>
-    <div class="saverow">
+
+    <div class="fieldlabel">תיאור (לא חובה - כדי שתדע בדיוק על מה זה)</div>
+    <textarea id="merchantNoteInput" class="noteinput" placeholder="למשל: מנוי חדר כושר, ביטוח בריאות פרטי...">${existingTag.note ? escHtml(existingTag.note) : ''}</textarea>
+
+    <div class="fieldlabel" style="text-align:center;">סוג ההוצאה</div>
+    <div style="display:flex; gap:8px; margin-bottom:6px;">
+      <button type="button" id="typeBtnOnetime" class="fuelbtn" style="flex:1;" onclick="selectTxType('onetime')">חד פעמי</button>
+      <button type="button" id="typeBtnRecurring" class="fuelbtn" style="flex:1;" onclick="selectTxType('recurring')">🔁 קבוע כל חודש</button>
+    </div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin-bottom:16px;">"קבוע" ייכנס אוטומטית לחישוב "כמה להביא היום", לכל תנועה עתידית עם אותו שם. אם המחיר יעלה בהשוואה לחודש הקודם - נתריע לך.</div>
+
+    <div id="installmentsWrap">
+      <div class="fieldlabel">מספר תשלומים שנותרו (רק אם יש לזה סוף, כמו הלוואה - השאירו ריק אם זה קבוע לצמיתות)</div>
+      <input id="merchantInstallmentsInput" class="contactinput" style="width:100%; margin-bottom:16px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם קבוע לצמיתות" value="${existingTag.installmentsLeft!=null ? existingTag.installmentsLeft : ''}">
+    </div>
+
+    <div class="saverow" style="margin-top:4px;">
       <button class="savebtn single" onclick="submitMerchantAlias('${encodeURIComponent(rawDesc)}')">💾 שמירה</button>
     </div>
-    ${current ? `<div class="cancel" onclick="resetMerchantAlias('${encodeURIComponent(rawDesc)}')" style="color:var(--unpaid);">איפוס לשם המקורי</div>` : ''}
+    ${current ? `<div class="cancel" onclick="resetMerchantAlias('${encodeURIComponent(rawDesc)}')" style="color:var(--unpaid);">איפוס השם לברירת המחדל</div>` : ''}
     <div class="cancel" onclick="closeSheet()">ביטול</div>
   `;
+  selectTxType(currentType);
+}
+let currentTxTypeSelection = 'onetime';
+function selectTxType(type){
+  currentTxTypeSelection = type;
+  const onetimeBtn = document.getElementById('typeBtnOnetime');
+  const recurringBtn = document.getElementById('typeBtnRecurring');
+  const installmentsWrap = document.getElementById('installmentsWrap');
+  if(!onetimeBtn || !recurringBtn) return;
+  onetimeBtn.style.background = type==='onetime' ? 'var(--accent)' : '';
+  onetimeBtn.style.color = type==='onetime' ? '#241b00' : '';
+  recurringBtn.style.background = type==='recurring' ? 'var(--accent)' : '';
+  recurringBtn.style.color = type==='recurring' ? '#241b00' : '';
+  if(installmentsWrap) installmentsWrap.style.display = (type==='recurring') ? 'block' : 'none';
 }
 function submitMerchantAlias(encodedRawDesc){
   const rawDesc = decodeURIComponent(encodedRawDesc);
   const name = (document.getElementById('merchantAliasInput').value || '').trim();
   if(name){ merchantAliases[rawDesc] = name; } else { delete merchantAliases[rawDesc]; }
   saveMerchantAliases();
+
+  const note = (document.getElementById('merchantNoteInput').value || '').trim();
+  if(currentTxTypeSelection === 'recurring'){
+    const installmentsRaw = document.getElementById('merchantInstallmentsInput').value;
+    const installmentsLeft = (installmentsRaw!=='' && parseInt(installmentsRaw,10)>=0) ? parseInt(installmentsRaw,10) : null;
+    bankTxTags[rawDesc] = { type:'recurring', note: note || null, installmentsLeft };
+  } else if(note){
+    bankTxTags[rawDesc] = { type:'onetime', note };
+  } else {
+    delete bankTxTags[rawDesc];
+  }
+  saveBankTxTags();
   closeSheet();
   render();
+  checkBankRecurringPriceIncreases();
 }
 function resetMerchantAlias(encodedRawDesc){
   const rawDesc = decodeURIComponent(encodedRawDesc);
@@ -2491,6 +3147,7 @@ function submitPayment(){
 function render(){
   if(currentScreen === 'debts'){ renderDebtsScreen(); return; }
   if(currentScreen === 'ai'){ renderAIScreen(); return; }
+  if(currentScreen === 'banksetup'){ renderBankSetupScreen(); return; }
   const list = filtered();
   const netTotal = list.reduce((s,e)=> s + netOf(e), 0);
   const outstanding = list.filter(e=>!isExpenseKind(e.kind) && e.status==='unpaid')
@@ -2542,6 +3199,10 @@ function render(){
     <div class="workdaybar" style="cursor:pointer;" onclick="openAIScreen()">
       <span>🤖 שאל את המונה שלי</span>
       <span class="wdbtn">שאלה</span>
+    </div>
+    <div class="workdaybar" style="cursor:pointer;" onclick="openBankSetupScreen()">
+      <span>🏦 חיבור אוטומטי לישראכרט/מקס</span>
+      <span class="wdbtn">מדריך</span>
     </div>
 
     <div class="outstanding ${outstanding>0?'':'hidden'}">
