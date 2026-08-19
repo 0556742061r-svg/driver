@@ -2067,6 +2067,7 @@ async function scrapeIsracard() {
         description: t.description,
         amount: t.chargedAmount != null ? t.chargedAmount : t.originalAmount,
         status: t.status,
+        installments: t.installments ? { number: t.installments.number, total: t.installments.total } : null,
       });
     });
   });
@@ -2101,6 +2102,7 @@ async function scrapeMax() {
         description: t.description,
         amount: t.chargedAmount != null ? t.chargedAmount : t.originalAmount,
         status: t.status,
+        installments: t.installments ? { number: t.installments.number, total: t.installments.total } : null,
       });
     });
   });
@@ -2665,10 +2667,11 @@ function renderDebtsScreen(){
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">${existingTag && existingTag.type==='recurring' ? '🔁 ' : ''}${escHtml(displayName)}</div>
               <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${existingTag && existingTag.type==='recurring' ? ` · <span style="color:var(--accent);">קבוע כל חודש (הוגדר בעבר)</span>` : ''}</div>
+              ${t.installments ? `<div class="dchips" style="margin-top:8px;"><div class="dchip">💳 תשלום ${t.installments.number} מתוך ${t.installments.total}</div></div>` : ''}
               ${(existingTag && existingTag.note) ? `<div class="dnote" style="margin-top:8px;"><span class="ic">📝</span><span>${escHtml(existingTag.note)} <span style="opacity:.6;">(תיאור שכבר הוגדר לעסק הזה)</span></span></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
                 <button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(bankTxKey(t))}')">✔️ אישור</button>
-                <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}')">✏️ עריכה</button>
+                <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})">✏️ עריכה</button>
               </div>
             </div>
           </div>
@@ -2718,9 +2721,10 @@ function renderDebtsScreen(){
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">${isTaggedRecurring ? (isFinished?'✅ ':'🔁 ') : ''}${escHtml(displayName)}</div>
               <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${merchantAliases[rawDesc] ? ` · <span style="opacity:.5;">מקורי: ${escHtml(rawDesc)}</span>` : ''}${isTaggedRecurring ? ` · <span style="color:var(--accent);">${isFinished ? 'הסתיים' : 'קבוע כל חודש'}</span>` : ''}</div>
-              ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip)) ? `
+              ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip || t.installments)) ? `
               <div class="dchips" style="margin-top:8px;">
                 ${priceUpChip}
+                ${t.installments ? `<div class="dchip">💳 תשלום ${t.installments.number} מתוך ${t.installments.total}</div>` : ''}
                 ${(tag && tag.installmentsLeft!=null) ? (isFinished
                     ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ הסתיים</div>`
                     : `<div class="dchip">🔢 נשארו ${tag.installmentsLeft} תשלומים</div>`) : ''}
@@ -2728,7 +2732,7 @@ function renderDebtsScreen(){
               ${(isLatestForDesc && tag && tag.note) ? `<div class="dnote" style="margin-top:8px;"><span class="ic">📝</span><span>${escHtml(tag.note)}</span></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
                 ${(isLatestForDesc && tag && tag.installmentsLeft!=null && !isFinished) ? `<button class="fuelbtn" onclick="markBankTxPaid('${encodeURIComponent(rawDesc)}')">✔️ תשלום זה נגבה</button>` : ''}
-                <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}')" style="font-size:13.5px; font-weight:700;">✏️ עריכה</button>
+                <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})" style="font-size:13.5px; font-weight:700;">✏️ עריכה</button>
               </div>
             </div>
           </div>
@@ -2916,13 +2920,14 @@ function renderDebtChart(){
   `;
 }
 
-function openMerchantAliasSheet(encodedRawDesc){
+function openMerchantAliasSheet(encodedRawDesc, suggestedRemaining){
   const rawDesc = decodeURIComponent(encodedRawDesc);
   document.getElementById('overlay').classList.add('open');
   const sheet = document.getElementById('sheet');
   const current = merchantAliases[rawDesc] || '';
   const existingTag = bankTxTags[rawDesc] || {};
-  const currentType = existingTag.type || 'onetime';
+  const currentType = existingTag.type || (suggestedRemaining!=null ? 'recurring' : 'onetime');
+  const installmentsValue = existingTag.installmentsLeft!=null ? existingTag.installmentsLeft : (suggestedRemaining!=null ? suggestedRemaining : '');
   sheet.innerHTML = `
     <h2>✏️ עריכת תנועה</h2>
     <div style="font-size:11.5px; color:var(--muted); text-align:center; margin-bottom:10px;">שם מקורי מהאשראי: "${escHtml(rawDesc)}"</div>
@@ -2940,7 +2945,8 @@ function openMerchantAliasSheet(encodedRawDesc){
 
     <div id="installmentsWrap">
       <div class="fieldlabel">מספר תשלומים שנותרו (רק אם יש לזה סוף, כמו הלוואה - השאירו ריק אם זה קבוע לצמיתות)</div>
-      <input id="merchantInstallmentsInput" class="contactinput" style="width:100%; margin-bottom:16px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם קבוע לצמיתות" value="${existingTag.installmentsLeft!=null ? existingTag.installmentsLeft : ''}">
+      <input id="merchantInstallmentsInput" class="contactinput" style="width:100%; margin-bottom:4px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם קבוע לצמיתות" value="${installmentsValue}">
+      ${(suggestedRemaining!=null && existingTag.installmentsLeft==null) ? `<div style="font-size:10.5px; color:var(--accent); text-align:center; margin-bottom:16px;">💳 הכרטיס עצמו מדווח על ${suggestedRemaining} תשלומים שנותרו - מולא אוטומטית</div>` : `<div style="margin-bottom:16px;"></div>`}
     </div>
 
     <div class="saverow" style="margin-top:4px;">
