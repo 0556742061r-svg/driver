@@ -8,7 +8,7 @@
     "start": "node bank-sync.js"
   },
   "dependencies": {
-    "israeli-bank-scrapers": "^6.7.3",
+    "israeli-bank-scrapers": "latest",
     "firebase-admin": "^12.1.0"
   }
 }
