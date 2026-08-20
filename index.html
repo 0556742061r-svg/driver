@@ -2423,7 +2423,7 @@ function renderDebtsScreen(){
     </div>` : ''}
     <div class="listwrap" style="margin-top:0;">
       ${upcomingObligations.map(o=>{
-        const urgent = o.daysAway<=5;
+        const urgent = o.daysAway<=0;
         const whenLabel = o.daysAway<=0 ? 'היום' : (o.daysAway===1 ? 'מחר' : `בעוד ${o.daysAway} ימים`);
         return `
         <div class="task ${urgent?'overdue':'ok'}" style="margin-bottom:8px;">
