@@ -2417,32 +2417,23 @@ function renderDebtsScreen(){
     <div class="dsection">
       <h3>🔭 מה יורד בקרוב (14 הימים הקרובים)</h3>
     </div>
+    ${upcomingObligations.some(o=>o.coveredByExtraIncome && !hasConfirmedIncomeThisMonth && o.daysAway<=7) ? `
+    <div style="margin:0 18px 10px; padding:10px 14px; background:var(--unpaid-dim); border-radius:12px; font-size:11.5px; color:var(--unpaid); line-height:1.6;">
+      ⚠️ כמה מהחיובים למטה אמורים להיות מכוסים מהכנסה נוספת שעדיין לא אושרה החודש - ודא שיש לך מאיפה.
+    </div>` : ''}
     <div class="listwrap" style="margin-top:0;">
       ${upcomingObligations.map(o=>{
         const urgent = o.daysAway<=5 && !o.prepared;
-        const riskyCovered = o.coveredByExtraIncome && !hasConfirmedIncomeThisMonth && o.daysAway<=7;
         const whenLabel = o.daysAway<=0 ? 'היום' : (o.daysAway===1 ? 'מחר' : `בעוד ${o.daysAway} ימים`);
         return `
-        <div class="dcard ${(urgent||riskyCovered)?'dueflag':''} ${o.prepared?'done':''}">
-          <div class="dcardtop">
-            <div class="davatar ${o.prepared?'done':''}">${o.prepared?'✅':o.icon}</div>
-            <div class="dcardhead">
-              <div class="dname">${escHtml(o.name)}</div>
-              <div class="dsub">${fmt(o.amount)} · ${whenLabel}</div>
+        <div class="task ${urgent?'overdue':'ok'}" style="margin-bottom:8px; ${o.prepared?'opacity:.55;':''}">
+          <div class="taskmid" style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <div style="min-width:0;">
+              <div class="taskttl" style="font-size:13px;">${o.prepared?'✅ ':o.icon+' '}${escHtml(o.name)}</div>
+              <div class="tasktime">${fmt(o.amount)} · ${whenLabel}${o.type==='cardbilling' ? ' · סה"כ בכרטיסים' : (o.coveredByExtraIncome ? ' · 🏦 מהכנסה נוספת' : ' · 🚗 מנסיעות')}</div>
             </div>
+            ${o.type!=='cardbilling' ? `<button class="fuelbtn" style="flex-shrink:0; padding:8px 12px; font-size:11.5px;" onclick="toggleObligationPrepared('${o.type}','${o.id}','${o.ym}')">${o.prepared ? '↩️' : '✔️ יש מאיפה'}</button>` : ''}
           </div>
-          <div class="dchips">
-            ${o.type==='cardbilling'
-                ? `<div class="dchip">💳 סה"כ קבוע שמזוהה בכרטיסים</div>`
-                : (o.coveredByExtraIncome
-                    ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 אמור להיות מכוסה מהכנסה נוספת</div>`
-                    : `<div class="dchip">🚗 מגיע מנסיעות</div>`)}
-            ${riskyCovered ? `<div class="dchip overdue">⚠️ ההכנסה שמכסה את זה עדיין לא אושרה החודש</div>` : ''}
-          </div>
-          ${o.type!=='cardbilling' ? `
-          <div class="dactions">
-            <button class="fuelbtn" onclick="toggleObligationPrepared('${o.type}','${o.id}','${o.ym}')">${o.prepared ? '↩️ בטל סימון' : '✔️ יש לי מאיפה להשיג את זה'}</button>
-          </div>` : ''}
         </div>
       `;
       }).join('')}
