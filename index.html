@@ -849,6 +849,7 @@ async function attachFirestoreListeners(){
     render();
     checkBankRecurringPriceIncreases();
     checkMixedMerchantAlerts();
+    autoApplyInstallmentSuggestions();
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(MERCHANT_ALIASES_KEY).onSnapshot(doc=>{
     const d = doc.data();
@@ -861,6 +862,7 @@ async function attachFirestoreListeners(){
     render();
     checkBankRecurringPriceIncreases();
     checkMixedMerchantAlerts();
+    autoApplyInstallmentSuggestions();
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(BANK_TX_APPROVALS_KEY).onSnapshot(doc=>{
     const d = doc.data();
@@ -956,6 +958,7 @@ async function load(){
   checkMonthlyRecurringReminders();
   checkBankRecurringPriceIncreases();
   checkMixedMerchantAlerts();
+  autoApplyInstallmentSuggestions();
 }
 function save(){ storageSet(STORAGE_KEY, entries); }
 function saveTasks(){ storageSet(TASKS_KEY, tasks); }
@@ -2092,6 +2095,27 @@ function detectPossibleMixedMerchants(){
   });
   return suspects;
 }
+function autoApplyInstallmentSuggestions(){
+  // if a transaction reports its own "X out of Y" installments from the card, and you've marked
+  // it recurring but never told us how many payments are left, use the card's own count so the
+  // charge automatically stops being counted once it's actually finished
+  let changed = false;
+  Object.keys(bankTxTags).forEach(desc=>{
+    const tag = bankTxTags[desc];
+    if(!tag || tag.type !== 'recurring' || tag.installmentsLeft != null) return;
+    const withInstallments = bankTransactions
+      .filter(t=>(t.description||'')===desc && t.installments)
+      .sort((a,b)=> new Date(b.date) - new Date(a.date))[0];
+    if(withInstallments){
+      const remaining = withInstallments.installments.total - withInstallments.installments.number;
+      if(remaining >= 0){
+        tag.installmentsLeft = remaining;
+        changed = true;
+      }
+    }
+  });
+  if(changed) saveBankTxTags();
+}
 function checkMixedMerchantAlerts(){
   const suspects = detectPossibleMixedMerchants();
   let changed = false;
@@ -2993,6 +3017,7 @@ function submitMerchantAlias(encodedRawDesc){
   render();
   checkBankRecurringPriceIncreases();
   checkMixedMerchantAlerts();
+  autoApplyInstallmentSuggestions();
 }
 function resetMerchantAlias(encodedRawDesc){
   const rawDesc = decodeURIComponent(encodedRawDesc);
