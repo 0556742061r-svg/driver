@@ -16,6 +16,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <style>
@@ -504,7 +505,7 @@ const DEBT_PAYMENTS_KEY = 'debtpayments_v1';
 const RECURRING_KEY = 'recurring_v1';
 const EXTRA_INCOME_KEY = 'extraincome_v1';
 const CARD_BILLING_DAY_KEY = 'cardbillingday_v1'; // day of month Isracard/Max actually charge your account (all purchases as one lump sum)
-const BANK_TRANSACTIONS_KEY = 'banktx_v1'; // written externally by the optional bank-sync GitHub Action, read-only here
+const BANK_TRANSACTIONS_KEY = 'banktx_v1'; // populated by manual Excel/CSV import from any bank or card company
 const MERCHANT_ALIASES_KEY = 'merchant_aliases_v1'; // maps raw bank description -> friendly name you choose, remembered forever
 const BANK_TX_TAGS_KEY = 'banktxtags_v1'; // maps raw bank description -> {type:'recurring'|'onetime'}, remembered forever
 const BANK_TX_APPROVALS_KEY = 'banktxapprovals_v1'; // maps a stable transaction signature -> true once you've reviewed & approved it
@@ -957,6 +958,125 @@ function saveExtraIncomes(){ storageSet(EXTRA_INCOME_KEY, extraIncomes); }
 function saveCardBillingDay(){ storageSet(CARD_BILLING_DAY_KEY, cardBillingDay!=null ? [cardBillingDay] : []); }
 function saveMerchantAliases(){ storageSet(MERCHANT_ALIASES_KEY, merchantAliases); }
 function saveBankTxTags(){ storageSet(BANK_TX_TAGS_KEY, bankTxTags); }
+function saveBankTransactions(){ storageSet(BANK_TRANSACTIONS_KEY, bankTransactions); }
+
+// ============ Manual Excel/CSV import (replaces the old GitHub-based auto sync) ============
+let importedRows = [];
+let importedHeaders = [];
+
+function triggerBankImport(){
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.xlsx,.xls,.csv';
+  input.onchange = (e) => {
+    const file = e.target.files[0];
+    if(file) handleBankImportFile(file);
+  };
+  input.click();
+}
+function handleBankImportFile(file){
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try{
+      const data = new Uint8Array(e.target.result);
+      const workbook = XLSX.read(data, {type:'array'});
+      const firstSheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json(worksheet, {header:1, raw:false, defval:''});
+      if(!rows || rows.length<2){ alert('לא נמצאו נתונים בקובץ.'); return; }
+      importedHeaders = rows[0].map(h=>String(h||'').trim());
+      importedRows = rows.slice(1).filter(r=>r.some(c=>String(c||'').trim()!==''));
+      if(importedRows.length===0){ alert('לא נמצאו שורות עם נתונים בקובץ.'); return; }
+      openImportMappingSheet();
+    }catch(err){
+      console.error('Import parse error', err);
+      alert('לא הצלחתי לקרוא את הקובץ. ודא שזה קובץ Excel (xlsx/xls) או CSV תקין.');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+function guessColumnIndex(keywords){
+  for(let i=0;i<importedHeaders.length;i++){
+    const h = (importedHeaders[i]||'').toLowerCase();
+    if(keywords.some(k=>h.includes(k))) return i;
+  }
+  return -1;
+}
+function openImportMappingSheet(){
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  const dateGuess = guessColumnIndex(['תאריך','date']);
+  const descGuess = guessColumnIndex(['תיאור','עסק','פירוט','description','שם']);
+  const amountGuess = guessColumnIndex(['סכום','חיוב','amount','עלות']);
+  const options = importedHeaders.map((h,i)=>`<option value="${i}">${escHtml(h||('עמודה '+(i+1)))}</option>`).join('');
+  sheet.innerHTML = `
+    <h2>📥 ייבוא תנועות</h2>
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin-bottom:16px; line-height:1.6;">
+      נמצאו ${importedRows.length} שורות בקובץ. בדוק שהעמודות נכונות (ניחשנו לפי הכותרות בקובץ).
+    </div>
+    <input id="importSourceLabel" class="contactinput" style="width:100%; margin-bottom:14px;" type="text" placeholder="מאיפה זה? (למשל: בנק הפועלים, ישראכרט...)">
+    <div class="fieldlabel">עמודת תאריך</div>
+    <select id="importDateCol" class="contactinput" style="width:100%; margin-bottom:12px;">${options}</select>
+    <div class="fieldlabel">עמודת תיאור / שם עסק</div>
+    <select id="importDescCol" class="contactinput" style="width:100%; margin-bottom:12px;">${options}</select>
+    <div class="fieldlabel">עמודת סכום</div>
+    <select id="importAmountCol" class="contactinput" style="width:100%; margin-bottom:16px;">${options}</select>
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitBankImport()">📥 ייבוא ${importedRows.length} שורות</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+  if(dateGuess>=0) document.getElementById('importDateCol').value = dateGuess;
+  if(descGuess>=0) document.getElementById('importDescCol').value = descGuess;
+  if(amountGuess>=0) document.getElementById('importAmountCol').value = amountGuess;
+}
+function parseImportedDate(val){
+  if(val==null || val==='') return null;
+  const s = String(val).trim();
+  let m = s.match(/^(\d{1,2})[\/\.\-](\d{1,2})[\/\.\-](\d{2,4})/);
+  if(m){
+    let d = m[1], mo = m[2], y = m[3];
+    if(y.length===2) y = '20'+y;
+    const dt = new Date(Number(y), Number(mo)-1, Number(d));
+    if(!isNaN(dt.getTime())) return dt.toISOString();
+  }
+  const dt2 = new Date(s);
+  if(!isNaN(dt2.getTime())) return dt2.toISOString();
+  return null;
+}
+function parseImportedAmount(val){
+  if(val==null || val==='') return null;
+  const s = String(val).replace(/[₪,\s]/g,'').replace(/^\((.*)\)$/,'-$1');
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+function submitBankImport(){
+  const sourceLabelVal = (document.getElementById('importSourceLabel').value || '').trim() || 'ייבוא ידני';
+  const dateCol = parseInt(document.getElementById('importDateCol').value,10);
+  const descCol = parseInt(document.getElementById('importDescCol').value,10);
+  const amountCol = parseInt(document.getElementById('importAmountCol').value,10);
+  let added = 0, skipped = 0;
+  importedRows.forEach(row=>{
+    const dateVal = parseImportedDate(row[dateCol]);
+    const desc = String(row[descCol]||'').trim();
+    const amount = parseImportedAmount(row[amountCol]);
+    if(!dateVal || !desc || amount==null){ skipped++; return; }
+    const newTx = { source: sourceLabelVal, account: null, date: dateVal, description: desc, amount, status: null, installments: null };
+    const key = bankTxKey(newTx);
+    if(bankTransactions.some(t=>bankTxKey(t)===key)){ skipped++; return; }
+    bankTransactions.push(newTx);
+    added++;
+  });
+  bankTransactions.sort((a,b)=> new Date(b.date) - new Date(a.date));
+  saveBankTransactions();
+  importedRows = [];
+  importedHeaders = [];
+  closeSheet();
+  render();
+  alert(`יובאו ${added} תנועות חדשות${skipped>0 ? ` (${skipped} דולגו - כבר קיימות או חסר מידע)` : ''}.`);
+}
+// ============ end manual import ============
+
 function saveBankTxApprovals(){ storageSet(BANK_TX_APPROVALS_KEY, bankTxApprovals); }
 function saveBankTxFlags(){ storageSet(BANK_TX_FLAGS_KEY, bankTxFlags); }
 function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
@@ -1782,6 +1902,11 @@ function debtPaidThisMonthAmount(debtId){
     return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
   }).reduce((s,p)=>s+p.amount, 0);
 }
+function sourceLabel(source){
+  if(source==='isracard') return '💳 ישראכרט';
+  if(source==='max') return '💳 מקס';
+  return `💳 ${escHtml(source||'לא ידוע')}`;
+}
 function bankTxKey(t){
   return `${t.source}|${t.date}|${t.description}|${t.amount}`;
 }
@@ -2104,452 +2229,6 @@ function openAIScreen(){
   currentScreen = 'ai';
   render();
 }
-function openBankSetupScreen(){
-  currentScreen = 'banksetup';
-  render();
-}
-function backToMain(){
-  currentScreen = 'main';
-  render();
-}
-
-// ============ Bank connection wizard (self-serve guide for any driver) ============
-const BSW_FILE1 = `// bank-sync.js
-// Pulls recent transactions from Isracard and Max using the user's own login
-// credentials (via the open-source \`israeli-bank-scrapers\` library), and
-// writes them into the same Firestore document shape that "המונה שלי" uses,
-// so the app can display them read-only.
-//
-// This script is meant to run inside a GitHub Action (see
-// .github/workflows/bank-sync.yml), reading all secrets from environment
-// variables that you set up as encrypted GitHub Secrets. It never receives
-// credentials any other way.
-
-const { CompanyTypes, createScraper } = require('israeli-bank-scrapers');
-const admin = require('firebase-admin');
-
-const BANK_TRANSACTIONS_KEY = 'banktx_v1';
-const DAYS_BACK = 35; // how many days of history to pull each run
-
-function requireEnv(name) {
-  const v = process.env[name];
-  if (!v) {
-    console.error(\`Missing required environment variable: \${name}\`);
-    process.exit(1);
-  }
-  return v;
-}
-
-async function scrapeIsracard() {
-  const options = {
-    companyId: CompanyTypes.isracard,
-    startDate: new Date(Date.now() - DAYS_BACK * 86400000),
-    combineInstallments: false,
-    showBrowser: false,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  };
-  const credentials = {
-    id: requireEnv('ISRACARD_ID'),
-    password: requireEnv('ISRACARD_PASSWORD'),
-    card6Digits: requireEnv('ISRACARD_CARD6DIGITS'),
-  };
-  const scraper = createScraper(options);
-  const result = await scraper.scrape(credentials);
-  if (!result.success) {
-    console.error('Isracard scrape failed:', result.errorType, result.errorMessage);
-    return [];
-  }
-  const txs = [];
-  (result.accounts || []).forEach(acc => {
-    (acc.txns || []).forEach(t => {
-      txs.push({
-        source: 'isracard',
-        account: acc.accountNumber,
-        date: t.date,
-        description: t.description,
-        amount: t.chargedAmount != null ? t.chargedAmount : t.originalAmount,
-        status: t.status,
-        installments: t.installments ? { number: t.installments.number, total: t.installments.total } : null,
-      });
-    });
-  });
-  return txs;
-}
-
-async function scrapeMax() {
-  const options = {
-    companyId: CompanyTypes.max,
-    startDate: new Date(Date.now() - DAYS_BACK * 86400000),
-    combineInstallments: false,
-    showBrowser: false,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  };
-  const credentials = {
-    username: requireEnv('MAX_USERNAME'),
-    password: requireEnv('MAX_PASSWORD'),
-  };
-  const scraper = createScraper(options);
-  const result = await scraper.scrape(credentials);
-  if (!result.success) {
-    console.error('Max scrape failed:', result.errorType, result.errorMessage);
-    return [];
-  }
-  const txs = [];
-  (result.accounts || []).forEach(acc => {
-    (acc.txns || []).forEach(t => {
-      txs.push({
-        source: 'max',
-        account: acc.accountNumber,
-        date: t.date,
-        description: t.description,
-        amount: t.chargedAmount != null ? t.chargedAmount : t.originalAmount,
-        status: t.status,
-        installments: t.installments ? { number: t.installments.number, total: t.installments.total } : null,
-      });
-    });
-  });
-  return txs;
-}
-
-async function main() {
-  const uid = requireEnv('FIREBASE_UID');
-  const serviceAccountJson = requireEnv('FIREBASE_SERVICE_ACCOUNT');
-  const serviceAccount = JSON.parse(serviceAccountJson);
-
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
-  const db = admin.firestore();
-
-  console.log('Scraping Isracard...');
-  const isracardTxs = await scrapeIsracard().catch(e => {
-    console.error('Isracard scrape threw:', e.message);
-    return [];
-  });
-  console.log(\`Isracard: \${isracardTxs.length} transactions\`);
-
-  console.log('Scraping Max...');
-  const maxTxs = await scrapeMax().catch(e => {
-    console.error('Max scrape threw:', e.message);
-    return [];
-  });
-  console.log(\`Max: \${maxTxs.length} transactions\`);
-
-  const allTxs = [...isracardTxs, ...maxTxs].sort((a, b) => new Date(b.date) - new Date(a.date));
-
-  const docRef = db.collection('users').doc(uid).collection('data').doc(BANK_TRANSACTIONS_KEY);
-  await docRef.set({
-    value: JSON.stringify(allTxs),
-    updatedAt: Date.now(),
-  });
-
-  console.log(\`Wrote \${allTxs.length} total transactions to Firestore for uid \${uid}.\`);
-}
-
-main().then(() => process.exit(0)).catch(e => {
-  console.error('bank-sync failed:', e);
-  process.exit(1);
-});
-`;
-
-const BSW_FILE2 = `{
-  "name": "bank-sync",
-  "version": "1.0.0",
-  "private": true,
-  "description": "Pulls Isracard/Max transactions into Firestore for המונה שלי",
-  "main": "bank-sync.js",
-  "scripts": {
-    "start": "node bank-sync.js"
-  },
-  "dependencies": {
-    "israeli-bank-scrapers": "latest",
-    "firebase-admin": "^12.1.0"
-  }
-}
-`;
-
-const BSW_FILE3 = `name: Bank Sync
-
-on:
-  schedule:
-    # Runs daily at 05:00 UTC (≈ 07:00/08:00 Israel time depending on DST)
-    - cron: '0 5 * * *'
-  workflow_dispatch: {}
-
-jobs:
-  sync:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Install dependencies
-        working-directory: scripts
-        run: npm install
-
-      - name: Run bank sync
-        working-directory: scripts
-        env:
-          ISRACARD_ID: \${{ secrets.ISRACARD_ID }}
-          ISRACARD_PASSWORD: \${{ secrets.ISRACARD_PASSWORD }}
-          ISRACARD_CARD6DIGITS: \${{ secrets.ISRACARD_CARD6DIGITS }}
-          MAX_USERNAME: \${{ secrets.MAX_USERNAME }}
-          MAX_PASSWORD: \${{ secrets.MAX_PASSWORD }}
-          FIREBASE_SERVICE_ACCOUNT: \${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          FIREBASE_UID: \${{ secrets.FIREBASE_UID }}
-        run: node bank-sync.js
-`;
-
-const BSW_STEPS = ['fork','pages','file1','file2','file3','s1','s2','s3','s4','s5','s6','s7','run'];
-const BSW_TOTAL = BSW_STEPS.length;
-const BSW_CIRC = 2 * Math.PI * 82;
-
-function bswGetUsername(){ return (localStorage.getItem('bsw_username') || '').trim(); }
-function bswSetUsername(u){ localStorage.setItem('bsw_username', u); }
-function bswGetChecked(){ try{ return JSON.parse(localStorage.getItem('bsw_checked') || '{}'); }catch(e){ return {}; } }
-function bswSetChecked(obj){ localStorage.setItem('bsw_checked', JSON.stringify(obj)); }
-
-function bswOnUsernameInput(val){
-  bswSetUsername(val);
-  bswUpdateLinks();
-}
-function bswUpdateLinks(){
-  const u = bswGetUsername() || 'YOUR-USERNAME';
-  const repo = `${u}/driver`;
-  const set = (id, href) => { const el = document.getElementById(id); if(el) el.href = href; };
-  set('bswLnkPages', `https://github.com/${repo}/settings/pages`);
-  set('bswLnkFile1', `https://github.com/${repo}/new/main?filename=scripts/bank-sync.js`);
-  set('bswLnkFile2', `https://github.com/${repo}/new/main?filename=scripts/package.json`);
-  set('bswLnkFile3', `https://github.com/${repo}/new/main?filename=.github/workflows/bank-sync.yml`);
-  for(let i=1;i<=7;i++) set('bswLnkSecrets'+i, `https://github.com/${repo}/settings/secrets/actions`);
-  set('bswLnkRun', `https://github.com/${repo}/actions/workflows/bank-sync.yml`);
-}
-function bswToggleCheck(key){
-  const checked = bswGetChecked();
-  checked[key] = !checked[key];
-  bswSetChecked(checked);
-  bswUpdateGauge();
-}
-function bswUpdateGauge(){
-  const checked = bswGetChecked();
-  const count = BSW_STEPS.filter(s => checked[s]).length;
-  const numEl = document.getElementById('bswGaugeNum');
-  if(numEl) numEl.innerHTML = count + '<span>/'+BSW_TOTAL+'</span>';
-  const fillEl = document.getElementById('bswGaugeFill');
-  if(fillEl) fillEl.style.strokeDashoffset = BSW_CIRC - (BSW_CIRC * count / BSW_TOTAL);
-  const doneEl = document.getElementById('bswGaugeDone');
-  if(doneEl) doneEl.style.display = (count === BSW_TOTAL) ? 'block' : 'none';
-  BSW_STEPS.forEach(s => {
-    const btn = document.querySelector(`[data-bswcheck="${s}"]`);
-    const card = document.querySelector(`[data-bswstep="${s}"]`);
-    if(btn){ btn.classList.toggle('on', !!checked[s]); btn.textContent = checked[s] ? '✓' : ''; }
-    if(card){ card.classList.toggle('checked', !!checked[s]); }
-  });
-}
-async function bswCopyCode(srcId, btn){
-  const text = document.getElementById(srcId).textContent;
-  try{
-    await navigator.clipboard.writeText(text);
-    btn.textContent = '✓ הועתק';
-    btn.classList.add('copied');
-    setTimeout(()=>{ btn.textContent = '📋 העתקה'; btn.classList.remove('copied'); }, 1800);
-  }catch(e){
-    alert('לא הצלחתי להעתיק אוטומטית - סמן ידנית והעתק.');
-  }
-}
-function bswToggleInfo(id, tall){
-  const el = document.getElementById(id);
-  if(!el) return;
-  el.classList.toggle('open');
-  if(tall) el.classList.toggle('tall');
-}
-
-function renderBankSetupScreen(){
-  const app = document.getElementById('app');
-  app.innerHTML = `
-    <header>
-      <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
-    </header>
-
-    <div class="bsw-hero">
-      <div class="bsw-eyebrow">המונה שלי · אפליקציית ההכנסות וההוצאות שלך</div>
-      <h1>תוך כ-4 דקות, "המונה שלי" 🚕<br>יתחיל למשוך אוטומטית מהאשראי שלך</h1>
-      <p>לא צריך להבין אנגלית ולא צריך להבין בתכנות. בכל שלב רק מעתיקים-מדביקים או לוחצים על כפתור.</p>
-      <p style="margin-top:10px;">התהליך רץ לגמרי בתוך <b>חשבון אישי משלך</b> באתר בשם GitHub (חינמי). אף אחד — לא אנחנו, לא מפתחי האפליקציה — לא רואה את הסיסמאות שלך בשום שלב.</p>
-      <div class="bsw-timepill">⏱️ כ-4 דקות · 13 שלבים קצרים</div>
-    </div>
-
-    <div class="bsw-infobox" id="bswWhatIsGithub">
-      <div class="bsw-infobox-head" onclick="bswToggleInfo('bswWhatIsGithub')">
-        <span>❓ מה זה בכלל GitHub? (30 שניות הסבר)</span>
-        <span class="bsw-chev">︿</span>
-      </div>
-      <div class="bsw-infobox-body">
-        <p><b>GitHub</b> הוא ארון אחסון דיגיטלי בחינם, שבו "המונה שלי" שלך יושב. כשעושים <span class="bsw-engterm">Fork</span> (=עותק אישי) — זה כמו לצלם את כל האפליקציה ולשמור לעצמך עותק, שרק אתה שולט בו. כל מילה באנגלית באתר של GitHub עצמו (כי האתר שלהם רק באנגלית) תוסבר כאן בעברית לצידה.</p>
-      </div>
-    </div>
-
-    <div class="bsw-gaugewrap">
-      <div class="bsw-gauge">
-        <svg viewBox="0 0 190 190">
-          <circle class="bsw-track" cx="95" cy="95" r="82"></circle>
-          <circle class="bsw-fill" id="bswGaugeFill" cx="95" cy="95" r="82" stroke-dasharray="${BSW_CIRC}" stroke-dashoffset="${BSW_CIRC}"></circle>
-        </svg>
-        <div class="bsw-gaugecenter">
-          <div class="bsw-num" id="bswGaugeNum">0<span>/${BSW_TOTAL}</span></div>
-          <div class="bsw-lbl">שלבים הושלמו</div>
-          <div class="bsw-done" id="bswGaugeDone" style="display:none;">🎉 מחובר!</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bsw-userbox">
-      <label>שם המשתמש שלך בגיטהאב (כדי שנבנה לך את הקישורים המדויקים)</label>
-      <input id="bswUsername" type="text" placeholder="your-github-username" autocapitalize="off" autocorrect="off" spellcheck="false" value="${escHtml(bswGetUsername())}" oninput="bswOnUsernameInput(this.value)">
-      <div class="bsw-hint">לא יודע מה זה? תלמד בשלב 1 למטה — תקבל שם משתמש כשתפתח חשבון.</div>
-    </div>
-
-    <div class="bsw-sectiontitle"><div class="bsw-badge">1</div><h2>עותק פרטי משלך</h2></div>
-    <div class="bsw-stepcard" data-bswstep="fork">
-      <div class="bsw-top">
-        <button class="bsw-checkbtn" data-bswcheck="fork" onclick="bswToggleCheck('fork')">✓</button>
-        <div class="bsw-body">
-          <h3>תפתח חשבון (אם עוד אין לך) ותלחץ על <span class="bsw-engterm">Fork</span></h3>
-          <p><span class="bsw-engterm">Fork</span> (=עותק אישי) יוצר לך העתק מלא של האפליקציה, בבעלותך המלאה — כולל אתר משלך. אם אין לך חשבון עדיין, הכפתור הראשון ייקח אותך להרשמה חינמית (2 דקות).</p>
-          <div class="bsw-links">
-            <a class="bsw-btnlink primary" href="https://github.com/signup" target="_blank" rel="noopener">📝 פתיחת חשבון (חינם)</a>
-            <a class="bsw-btnlink" href="https://github.com/0556742061r-svg/driver/fork" target="_blank" rel="noopener">🍴 העתקה לחשבון שלי (Fork)</a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bsw-sectiontitle"><div class="bsw-badge">2</div><h2>הפעלת האתר שלך</h2></div>
-    <div class="bsw-stepcard" data-bswstep="pages">
-      <div class="bsw-top">
-        <button class="bsw-checkbtn" data-bswcheck="pages" onclick="bswToggleCheck('pages')">✓</button>
-        <div class="bsw-body">
-          <h3>בעמוד שנפתח, תוודא שכתוב "main" ותלחץ Save</h3>
-          <p><span class="bsw-engterm">Save</span> = שמירה. זה מפעיל את הכתובת הציבורית של האפליקציה שלך.</p>
-          <div class="bsw-links"><a class="bsw-btnlink" id="bswLnkPages" href="#" target="_blank" rel="noopener">⚙️ פתיחת עמוד ההפעלה</a></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bsw-sectiontitle"><div class="bsw-badge">3-5</div><h2>שלושה קבצי הפעלה</h2><span class="bsw-sub">מדביקים, לא כותבים</span></div>
-
-    <div class="bsw-stepcard" data-bswstep="file1">
-      <div class="bsw-top">
-        <button class="bsw-checkbtn" data-bswcheck="file1" onclick="bswToggleCheck('file1')">✓</button>
-        <div class="bsw-body">
-          <h3>הקובץ הראשון — סקריפט המשיכה עצמו</h3>
-          <p>תלחץ "העתקה", תלחץ "יצירת הקובץ", תדביק, ותלחץ בסוף על הכפתור הירוק <span class="bsw-engterm">Commit changes</span> (=שמירה).</p>
-          <div class="bsw-codebox" id="bswCodeFile1">${escHtml(BSW_FILE1)}</div>
-          <div class="bsw-links">
-            <button class="bsw-btncopy" onclick="bswCopyCode('bswCodeFile1', this)">📋 העתקה</button>
-            <a class="bsw-btnlink primary" id="bswLnkFile1" href="#" target="_blank" rel="noopener">➕ יצירת הקובץ</a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bsw-stepcard" data-bswstep="file2">
-      <div class="bsw-top">
-        <button class="bsw-checkbtn" data-bswcheck="file2" onclick="bswToggleCheck('file2')">✓</button>
-        <div class="bsw-body">
-          <h3>הקובץ השני — רשימת התוכנות הדרושות</h3>
-          <p>אותו תהליך בדיוק: העתקה → יצירת הקובץ → הדבקה → <span class="bsw-engterm">Commit changes</span> (שמירה).</p>
-          <div class="bsw-codebox" id="bswCodeFile2">${escHtml(BSW_FILE2)}</div>
-          <div class="bsw-links">
-            <button class="bsw-btncopy" onclick="bswCopyCode('bswCodeFile2', this)">📋 העתקה</button>
-            <a class="bsw-btnlink primary" id="bswLnkFile2" href="#" target="_blank" rel="noopener">➕ יצירת הקובץ</a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bsw-stepcard" data-bswstep="file3">
-      <div class="bsw-top">
-        <button class="bsw-checkbtn" data-bswcheck="file3" onclick="bswToggleCheck('file3')">✓</button>
-        <div class="bsw-body">
-          <h3>הקובץ השלישי — מריץ הכל אוטומטית כל בוקר</h3>
-          <p>אותו תהליך שוב: העתקה → יצירת הקובץ → הדבקה → <span class="bsw-engterm">Commit changes</span> (שמירה).</p>
-          <div class="bsw-codebox" id="bswCodeFile3">${escHtml(BSW_FILE3)}</div>
-          <div class="bsw-links">
-            <button class="bsw-btncopy" onclick="bswCopyCode('bswCodeFile3', this)">📋 העתקה</button>
-            <a class="bsw-btnlink primary" id="bswLnkFile3" href="#" target="_blank" rel="noopener">➕ יצירת הקובץ</a>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bsw-sectiontitle"><div class="bsw-badge">6-12</div><h2>כספת דיגיטלית לסיסמאות</h2><span class="bsw-sub">7 ערכים</span></div>
-    <div class="bsw-stepcard">
-      <p style="margin:0; font-size:12px; color:var(--muted); line-height:1.7;">בעמוד שנפתח יש כפתור ירוק בשם <span class="bsw-engterm">New repository secret</span> (=סוד חדש). לכל שורה למטה: תלחץ עליו, בתיבה <span class="bsw-engterm">Name</span> (=שם) תמלא בדיוק את מה שכתוב, בתיבה <span class="bsw-engterm">Secret</span> (=סוד) תמלא את הערך, ותלחץ <span class="bsw-engterm">Add secret</span> (=הוספה). זה מוצפן — גם אנחנו לא יכולים לראות את מה שתזין.</p>
-    </div>
-
-    ${[
-      ['s1','ISRACARD_ID','תעודת הזהות שאיתה אתה מתחבר לישראכרט.'],
-      ['s2','ISRACARD_PASSWORD','הסיסמה שלך לישראכרט.'],
-      ['s3','ISRACARD_CARD6DIGITS','6 הספרות האחרונות של כרטיס האשראי.'],
-      ['s4','MAX_USERNAME','שם המשתמש שלך במקס (Max).'],
-      ['s5','MAX_PASSWORD','הסיסמה שלך במקס.'],
-      ['s6','FIREBASE_UID','פתח את "המונה שלי" שלך → תפריט → תמצא שורה שמתחילה ב-"UID:" → תעתיק אותה.'],
-      ['s7','FIREBASE_SERVICE_ACCOUNT','ב-Firebase Console של הפרויקט שלך → Project Settings → Service Accounts → "Generate new private key" → תעתיק את <b>כל</b> תוכן קובץ ה-JSON שיורד.'],
-    ].map(([key,name,desc],i)=>`
-    <div class="bsw-stepcard" data-bswstep="${key}">
-      <div class="bsw-top">
-        <button class="bsw-checkbtn" data-bswcheck="${key}" onclick="bswToggleCheck('${key}')">✓</button>
-        <div class="bsw-body">
-          <div class="bsw-secretname">${name}</div>
-          <p>${desc}</p>
-          <div class="bsw-links"><a class="bsw-btnlink" id="bswLnkSecrets${i+1}" href="#" target="_blank" rel="noopener">🔐 פתיחת הכספת</a></div>
-        </div>
-      </div>
-    </div>`).join('')}
-
-    <div class="bsw-sectiontitle"><div class="bsw-badge">13</div><h2>בדיקה ראשונה</h2></div>
-    <div class="bsw-stepcard" data-bswstep="run">
-      <div class="bsw-top">
-        <button class="bsw-checkbtn" data-bswcheck="run" onclick="bswToggleCheck('run')">✓</button>
-        <div class="bsw-body">
-          <h3>תלחץ Actions, אחר כך "Bank Sync", אחר כך הכפתור "Run workflow"</h3>
-          <p>תוך כדקה תראה עיגול ירוק ✅. אחר כך זה ירוץ לבד כל בוקר — לא תצטרך לגעת בזה שוב.</p>
-          <div class="bsw-links"><a class="bsw-btnlink primary" id="bswLnkRun" href="#" target="_blank" rel="noopener">▶️ פתיחת הבדיקה</a></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="bsw-sectiontitle"><div class="bsw-badge">?</div><h2>אם הבדיקה נכשלת</h2></div>
-    <div class="bsw-infobox" id="bswTroubleshoot">
-      <div class="bsw-infobox-head" onclick="bswToggleInfo('bswTroubleshoot', true)">
-        <span>🔧 מה עושים אם רואים ❌ אדום, או ✅ ירוק אבל בלי תנועות?</span>
-        <span class="bsw-chev">︿</span>
-      </div>
-      <div class="bsw-infobox-body">
-        <p style="padding-top:0;"><b>איך בודקים מה בדיוק קרה:</b> ב-<span class="bsw-engterm">Actions</span> תלחץ על הריצה שהסתיימה → תלחץ על "sync" → תלחץ על "Run bank sync" → יפתח טקסט. תחפש בו שורות עם המילה <span class="bsw-engterm">transactions</span>.</p>
-        <p><b>"INVALID_PASSWORD" ליד ישראכרט או מקס</b><br>הכי נפוץ. הסיסמה/תעודת הזהות שגויות או התחלפו. פתרון: תחזור לכספת, ✏️ ליד הסוד המתאים, תזין מחדש, <span class="bsw-engterm">Update secret</span>, ותריץ שוב.</p>
-        <p><b>הריצה ירוקה ✅ אבל כתוב "0 transactions"</b><br>כמעט תמיד אותה סיבה כמו למעלה. תעדכן ותריץ שוב.</p>
-        <p><b>הבנק מבקש קוד אימות SMS</b><br>חלק מהבנקים דורשים קוד בכניסה ראשונה ממכשיר "חדש". אם זה קורה, תגיד לנו איזה בנק ונבדוק פתרון.</p>
-        <p style="margin-bottom:0;"><b>חשוב לזכור:</b> אף תקלה כאן לא מסכנת כסף או נתונים - במקרה הגרוע ביותר, פשוט לא ימשכו תנועות עד שהפרט השגוי יתוקן.</p>
-      </div>
-    </div>
-
-    <div class="bsw-footer">
-      כל הפרטים שלך נשארים בחשבון הגיטהאב האישי שלך בלבד.<br>
-      תקוע באמצע? תשאל בעמוד "🤖 שאל את המונה שלי".
-    </div>
-  `;
-  bswUpdateLinks();
-  bswUpdateGauge();
-}
-// ============ end bank connection wizard ============
 
 let aiChatHistory = []; // [{role:'user'|'assistant', text:'...'}] - session only, not persisted
 let aiIsThinking = false;
@@ -2764,6 +2443,16 @@ function renderDebtsScreen(){
     </div>
     ` : ''}
 
+    <div class="dsection">
+      <h3>📥 ייבוא תנועות מאקסל/CSV</h3>
+    </div>
+    <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+      תייצא קובץ Excel/CSV מהאתר של הבנק או חברת האשראי (כל בנק, לא רק ישראכרט/מקס), ותייבא אותו כאן. אין קישור לגיטהאב או לסיסמאות - הקובץ נשאר במכשיר שלך בלבד.
+    </div>
+    <div class="listwrap" style="margin-top:0;">
+      <div class="addcard" onclick="triggerBankImport()"><span>📥</span> בחירת קובץ לייבוא</div>
+    </div>
+
     ${bankTransactions.length>0 ? `
     ${(()=>{
       const flagged = bankTransactions.filter(t=>bankTxFlags[bankTxKey(t)]);
@@ -2789,7 +2478,7 @@ function renderDebtsScreen(){
           <div class="task" style="margin-bottom:8px; border-color:var(--unpaid); background:var(--unpaid-dim);">
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">🔍 ${escHtml(displayName)}</div>
-              <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${!isBankTxApproved(t) ? ` · <span style="color:var(--unpaid); font-weight:700;">עדיין לא אושרה</span>` : ''}</div>
+              <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${!isBankTxApproved(t) ? ` · <span style="color:var(--unpaid); font-weight:700;">עדיין לא אושרה</span>` : ''}</div>
               ${(existingTag && existingTag.coveredByExtraIncome) ? `<div class="dchips" style="margin-top:8px;"><div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
                 ${!isBankTxApproved(t) ? `<button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(key)}')">✔️ אישור</button>` : ''}
@@ -2829,7 +2518,7 @@ function renderDebtsScreen(){
           <div class="task" style="margin-bottom:8px; border-color:#5a3a26;">
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">${existingTag && existingTag.type==='recurring' ? '🔁 ' : ''}${escHtml(displayName)}</div>
-              <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${existingTag && existingTag.type==='recurring' ? ` · <span style="color:var(--accent);">קבוע כל חודש (הוגדר בעבר)</span>` : ''}</div>
+              <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${existingTag && existingTag.type==='recurring' ? ` · <span style="color:var(--accent);">קבוע כל חודש (הוגדר בעבר)</span>` : ''}</div>
               ${(t.installments || (existingTag && existingTag.coveredByExtraIncome)) ? `
               <div class="dchips" style="margin-top:8px;">
                 ${existingTag && existingTag.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
@@ -2890,7 +2579,7 @@ function renderDebtsScreen(){
           <div class="task ok" style="margin-bottom:8px;">
             <div class="taskmid" style="width:100%;">
               <div class="taskttl">${isTaggedRecurring ? (isFinished?'✅ ':'🔁 ') : ''}${escHtml(displayName)}</div>
-              <div class="tasktime">${t.source==='isracard'?'💳 ישראכרט':'💳 מקס'}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${merchantAliases[rawDesc] ? ` · <span style="opacity:.5;">מקורי: ${escHtml(rawDesc)}</span>` : ''}${isTaggedRecurring ? ` · <span style="color:var(--accent);">${isFinished ? 'הסתיים' : 'קבוע כל חודש'}</span>` : ''}</div>
+              <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${merchantAliases[rawDesc] ? ` · <span style="opacity:.5;">מקורי: ${escHtml(rawDesc)}</span>` : ''}${isTaggedRecurring ? ` · <span style="color:var(--accent);">${isFinished ? 'הסתיים' : 'קבוע כל חודש'}</span>` : ''}</div>
               ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip || t.installments || (tag && tag.coveredByExtraIncome))) ? `
               <div class="dchips" style="margin-top:8px;">
                 ${(tag && tag.coveredByExtraIncome) ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
@@ -3409,7 +3098,6 @@ function submitPayment(){
 function render(){
   if(currentScreen === 'debts'){ renderDebtsScreen(); return; }
   if(currentScreen === 'ai'){ renderAIScreen(); return; }
-  if(currentScreen === 'banksetup'){ renderBankSetupScreen(); return; }
   const list = filtered();
   const netTotal = list.reduce((s,e)=> s + netOf(e), 0);
   const outstanding = list.filter(e=>!isExpenseKind(e.kind) && e.status==='unpaid')
@@ -3461,10 +3149,6 @@ function render(){
     <div class="workdaybar" style="cursor:pointer;" onclick="openAIScreen()">
       <span>🤖 שאל את המונה שלי</span>
       <span class="wdbtn">שאלה</span>
-    </div>
-    <div class="workdaybar" style="cursor:pointer;" onclick="openBankSetupScreen()">
-      <span>🏦 חיבור אוטומטי לישראכרט/מקס</span>
-      <span class="wdbtn">מדריך</span>
     </div>
 
     <div class="outstanding ${outstanding>0?'':'hidden'}">
