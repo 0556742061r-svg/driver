@@ -511,6 +511,7 @@ const BANK_TX_TAGS_KEY = 'banktxtags_v1'; // maps raw bank description -> {type:
 const BANK_TX_APPROVALS_KEY = 'banktxapprovals_v1'; // maps a stable transaction signature -> true once you've reviewed & approved it
 const BANK_TX_FLAGS_KEY = 'banktxflags_v1'; // maps a stable transaction signature -> {status:'suspicious', flaggedAt} - stays until you resolve it
 const BANK_SYNC_STATUS_KEY = 'banksyncstatus_v1'; // written externally by the bank-sync Action - tells us if a source (Isracard/Max) failed on the last run
+const LAST_IMPORT_INFO_KEY = 'lastimportinfo_v1'; // {source, count, importedAt} for the most recent manual Excel/CSV import
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
 const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
@@ -533,6 +534,7 @@ let bankTxTags = {};
 let bankTxApprovals = {};
 let bankTxFlags = {};
 let bankSyncStatus = null;
+let lastImportInfo = null;
 let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
 let debtEditTargetId = null;
 let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
@@ -872,6 +874,11 @@ async function attachFirestoreListeners(){
     bankSyncStatus = (d && d.value) ? JSON.parse(d.value) : null;
     render();
   }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(LAST_IMPORT_INFO_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    lastImportInfo = (d && d.value) ? JSON.parse(d.value) : null;
+    render();
+  }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
     const d = doc.data();
     const arr = (d && d.value) ? JSON.parse(d.value) : [];
@@ -937,6 +944,7 @@ async function load(){
   bankTxApprovals = (await storageGet(BANK_TX_APPROVALS_KEY)) || {};
   bankTxFlags = (await storageGet(BANK_TX_FLAGS_KEY)) || {};
   bankSyncStatus = (await storageGet(BANK_SYNC_STATUS_KEY)) || null;
+  lastImportInfo = (await storageGet(LAST_IMPORT_INFO_KEY)) || null;
   const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
   if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
   workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
@@ -959,6 +967,7 @@ function saveCardBillingDay(){ storageSet(CARD_BILLING_DAY_KEY, cardBillingDay!=
 function saveMerchantAliases(){ storageSet(MERCHANT_ALIASES_KEY, merchantAliases); }
 function saveBankTxTags(){ storageSet(BANK_TX_TAGS_KEY, bankTxTags); }
 function saveBankTransactions(){ storageSet(BANK_TRANSACTIONS_KEY, bankTransactions); }
+function saveLastImportInfo(){ storageSet(LAST_IMPORT_INFO_KEY, lastImportInfo); }
 
 // ============ Manual Excel/CSV import (replaces the old GitHub-based auto sync) ============
 let importedRows = [];
@@ -1075,6 +1084,8 @@ function submitBankImport(){
   });
   bankTransactions.sort((a,b)=> new Date(b.date) - new Date(a.date));
   saveBankTransactions();
+  lastImportInfo = { source: sourceLabelVal, count: added, importedAt: Date.now() };
+  saveLastImportInfo();
   importedRows = [];
   importedHeaders = [];
   closeSheet();
@@ -2443,6 +2454,12 @@ function renderDebtsScreen(){
     <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
       תייצא קובץ Excel/CSV מהאתר של הבנק או חברת האשראי (כל בנק, לא רק ישראכרט/מקס), ותייבא אותו כאן. אין קישור לגיטהאב או לסיסמאות - הקובץ נשאר במכשיר שלך בלבד.
     </div>
+    ${lastImportInfo ? `
+    <div style="margin:0 18px 12px; padding:10px 14px; background:var(--surface2); border-radius:12px; font-size:11.5px; color:var(--muted); line-height:1.6;">
+      📅 יובא לאחרונה: <b style="color:var(--text);">${new Date(lastImportInfo.importedAt).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})}</b>
+      · מקור: <b style="color:var(--text);">${escHtml(lastImportInfo.source)}</b>
+      · ${lastImportInfo.count} תנועות חדשות
+    </div>` : ''}
     <div class="listwrap" style="margin-top:0;">
       <div class="addcard" onclick="triggerBankImport()"><span>📥</span> בחירת קובץ לייבוא</div>
       ${bankTransactions.length>0 ? `<div class="addcard" onclick="clearAllBankTransactions()" style="color:var(--unpaid); border-color:#5a3a26;"><span>🗑️</span> מחיקת כל התנועות (שומר את הזיכרון)</div>` : ''}
