@@ -848,6 +848,7 @@ async function attachFirestoreListeners(){
     bankTransactions = (d && d.value) ? JSON.parse(d.value) : [];
     render();
     checkBankRecurringPriceIncreases();
+    checkMixedMerchantAlerts();
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(MERCHANT_ALIASES_KEY).onSnapshot(doc=>{
     const d = doc.data();
@@ -859,6 +860,7 @@ async function attachFirestoreListeners(){
     bankTxTags = (d && d.value) ? JSON.parse(d.value) : {};
     render();
     checkBankRecurringPriceIncreases();
+    checkMixedMerchantAlerts();
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(BANK_TX_APPROVALS_KEY).onSnapshot(doc=>{
     const d = doc.data();
@@ -953,6 +955,7 @@ async function load(){
   checkMonthlyDebtReminders();
   checkMonthlyRecurringReminders();
   checkBankRecurringPriceIncreases();
+  checkMixedMerchantAlerts();
 }
 function save(){ storageSet(STORAGE_KEY, entries); }
 function saveTasks(){ storageSet(TASKS_KEY, tasks); }
@@ -2060,7 +2063,50 @@ function markBankTxPaid(encodedRawDesc){
   render();
   if(tag.installmentsLeft === 0) celebrateConfetti();
 }
+function detectPossibleMixedMerchants(){
+  const byDesc = {};
+  bankTransactions.forEach(t=>{
+    const desc = t.description || '';
+    if(!bankTxTags[desc] || bankTxTags[desc].type !== 'recurring') return;
+    if(!isBankTxApproved(t)) return;
+    if(!byDesc[desc]) byDesc[desc] = [];
+    byDesc[desc].push(Math.abs(Number(t.amount)||0));
+  });
+  const suspects = [];
+  Object.keys(byDesc).forEach(desc=>{
+    const amounts = byDesc[desc];
+    if(amounts.length < 3) return;
+    // group amounts into clusters that are "basically the same value" (small tolerance)
+    const clusters = [];
+    amounts.forEach(a=>{
+      const found = clusters.find(c => Math.abs(c.avg - a) <= Math.max(3, c.avg*0.05));
+      if(found){ found.items.push(a); found.avg = found.items.reduce((s,x)=>s+x,0)/found.items.length; }
+      else clusters.push({ avg:a, items:[a] });
+    });
+    // two (or more) DIFFERENT amounts that each repeat 2+ times = likely two separate obligations,
+    // not a single rate that drifted gradually over time
+    const repeating = clusters.filter(c=>c.items.length>=2);
+    if(repeating.length>=2){
+      suspects.push({ desc, amounts: repeating.map(c=>Math.round(c.avg)).sort((a,b)=>a-b) });
+    }
+  });
+  return suspects;
+}
+function checkMixedMerchantAlerts(){
+  const suspects = detectPossibleMixedMerchants();
+  let changed = false;
+  suspects.forEach(s=>{
+    const alertId = `bankmixed-${s.desc}`;
+    if(!tasks.find(t=>t.id===alertId)){
+      const displayName = merchantAliases[s.desc] || s.desc;
+      tasks.push({ id:alertId, title:`🔀 ${displayName} - נראה כמו שני חיובים שונים (${s.amounts.map(a=>fmt(a)).join(' ו-')}) - כדאי להפריד`, deadline:Date.now(), done:false });
+      changed = true;
+    }
+  });
+  if(changed) saveTasks();
+}
 function checkBankRecurringPriceIncreases(){
+  const mixedDescs = new Set(detectPossibleMixedMerchants().map(s=>s.desc));
   const byDesc = {};
   bankTransactions.forEach(t=>{
     const desc = t.description || '';
@@ -2071,6 +2117,9 @@ function checkBankRecurringPriceIncreases(){
   });
   let changed = false;
   Object.keys(byDesc).forEach(desc=>{
+    if(mixedDescs.has(desc)) return; // likely two different obligations sharing one name - the
+                                       // "מכ"ל שונים" alert below covers this instead, so skip the
+                                       // misleading "price changed" alert for it
     const sorted = byDesc[desc].sort((a,b)=> new Date(b.date) - new Date(a.date));
     if(sorted.length < 2) return;
     const latest = Math.abs(Number(sorted[0].amount)||0);
@@ -2622,15 +2671,24 @@ function renderDebtsScreen(){
               }
             }
           }
+          let mixedChip = '';
+          if(isTaggedRecurring && isLatestForDesc){
+            const isMixed = detectPossibleMixedMerchants().some(s=>s.desc===rawDesc);
+            if(isMixed){
+              mixedChip = `<div class="dchip overdue">🔀 נראה כמו שני חיובים שונים - כדאי להפריד</div>`;
+              priceUpChip = ''; // don't also show a misleading "price changed" when it's really two different bills
+            }
+          }
 
           return `
           <div class="task ok" style="margin-bottom:8px;">
             <div class="taskmid" style="width:100%;">
               <div class="taskttl" onclick="quickRenameMerchant('${encodeURIComponent(rawDesc)}','${encodeURIComponent(displayName)}')" style="cursor:pointer;">${isTaggedRecurring ? (isFinished?'✅ ':'🔁 ') : ''}${escHtml(displayName)} <span style="opacity:.4; font-size:11px;">✏️</span></div>
               <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${merchantAliases[rawDesc] ? ` · <span style="opacity:.5;">מקורי: ${escHtml(rawDesc)}</span>` : ''}${isTaggedRecurring ? ` · <span style="color:var(--accent);">${isFinished ? 'הסתיים' : 'קבוע כל חודש'}</span>` : ''}</div>
-              ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip || t.installments || (tag && tag.coveredByExtraIncome))) ? `
+              ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip || mixedChip || t.installments || (tag && tag.coveredByExtraIncome))) ? `
               <div class="dchips" style="margin-top:8px;">
                 ${(tag && tag.coveredByExtraIncome) ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
+                ${mixedChip}
                 ${priceUpChip}
                 ${t.installments ? `<div class="dchip">💳 תשלום ${t.installments.number} מתוך ${t.installments.total}</div>` : ''}
                 ${(tag && tag.installmentsLeft!=null) ? (isFinished
@@ -2934,6 +2992,7 @@ function submitMerchantAlias(encodedRawDesc){
   closeSheet();
   render();
   checkBankRecurringPriceIncreases();
+  checkMixedMerchantAlerts();
 }
 function resetMerchantAlias(encodedRawDesc){
   const rawDesc = decodeURIComponent(encodedRawDesc);
