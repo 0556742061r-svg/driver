@@ -964,6 +964,12 @@ function saveBankTransactions(){ storageSet(BANK_TRANSACTIONS_KEY, bankTransacti
 let importedRows = [];
 let importedHeaders = [];
 
+function clearAllBankTransactions(){
+  if(!confirm(`למחוק את כל ${bankTransactions.length} התנועות הקיימות?\n\nהזיכרון נשאר: שמות עסקים, תיאורים, סימוני "קבוע/חד פעמי", "מכוסה מהכנסה נוספת" ותנועות "בבירור" - כל זה יחול אוטומטית שוב על תנועות שתייבא מחדש עם אותו שם עסק.\n\nזה רק מנקה את רשימת התנועות עצמה, כדי שלא תהיה כפילות בייבוא הבא.`)) return;
+  bankTransactions = [];
+  saveBankTransactions();
+  render();
+}
 function triggerBankImport(){
   const input = document.createElement('input');
   input.type = 'file';
@@ -2451,6 +2457,7 @@ function renderDebtsScreen(){
     </div>
     <div class="listwrap" style="margin-top:0;">
       <div class="addcard" onclick="triggerBankImport()"><span>📥</span> בחירת קובץ לייבוא</div>
+      ${bankTransactions.length>0 ? `<div class="addcard" onclick="clearAllBankTransactions()" style="color:var(--unpaid); border-color:#5a3a26;"><span>🗑️</span> מחיקת כל התנועות (שומר את הזיכרון)</div>` : ''}
     </div>
 
     ${bankTransactions.length>0 ? `
