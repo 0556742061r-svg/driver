@@ -2640,9 +2640,9 @@ function renderDebtsScreen(){
               <div class="dpct ${isDone?'done':''}">${pct}%</div>
             </div>
             <div class="dbar"><div class="dbarfill ${isDone?'done':''}" style="width:${pct}%"></div></div>
-            ${(!isDone && (d.monthlyAgreed || d.dueDay || d.coveredByExtraIncome)) ? `
+            ${!isDone ? `
             <div class="dchips">
-              ${d.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
+              ${d.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : `<div class="dchip" style="background:var(--accent-dim); color:var(--accent);">🚗 מנסיעות</div>`}
               ${d.monthlyAgreed ? `<div class="dchip">🤝 ${fmt(d.monthlyAgreed)}/חודש · כ-${Math.ceil(remaining/d.monthlyAgreed)} חודשים נותרו</div>` : ''}
               ${d.dueDay ? (isOverdue
                   ? `<div class="dchip overdue">⚠️ עבר יום ${d.dueDay} - עדיין לא שולם החודש</div>`
@@ -2685,15 +2685,16 @@ function renderDebtsScreen(){
               <div class="dsub">${fmt(r.amount)} לחודש</div>
             </div>
           </div>
-          ${(r.dueDay || r.installmentsLeft!=null || r.coveredByExtraIncome || r.isAutomatic) ? `
+          ${!isFinished ? `
           <div class="dchips">
-            ${r.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
-            ${(!isFinished && r.isAutomatic) ? `<div class="dchip">🔁 יורד אוטומטית${r.dueDay ? ` ביום ${r.dueDay} לחודש` : ''}</div>` : ''}
-            ${(!isFinished && !r.isAutomatic && r.dueDay) ? `<div class="dchip ${isPastDue?'':'due'}">📅 יורד ביום ${r.dueDay} לחודש</div>` : ''}
-            ${r.installmentsLeft!=null ? (isFinished
-                ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ העסקה הסתיימה</div>`
-                : `<div class="dchip">🔢 נשארו ${r.installmentsLeft} תשלומים</div>`) : ''}
-          </div>` : ''}
+            ${r.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : `<div class="dchip" style="background:var(--accent-dim); color:var(--accent);">🚗 מנסיעות</div>`}
+            ${r.isAutomatic ? `<div class="dchip">🔁 יורד אוטומטית${r.dueDay ? ` ביום ${r.dueDay} לחודש` : ''}</div>` : ''}
+            ${(!r.isAutomatic && r.dueDay) ? `<div class="dchip ${isPastDue?'':'due'}">📅 יורד ביום ${r.dueDay} לחודש</div>` : ''}
+            ${r.installmentsLeft!=null ? `<div class="dchip">🔢 נשארו ${r.installmentsLeft} תשלומים</div>` : ''}
+          </div>` : `
+          <div class="dchips">
+            <div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ העסקה הסתיימה</div>
+          </div>`}
           ${bankMatch ? `
           <div class="dnote" style="background:var(--accent-dim); color:var(--accent);">
             <span class="ic">🔗</span>
