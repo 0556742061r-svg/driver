@@ -2643,6 +2643,7 @@ function renderDebtsScreen(){
                 <button class="fuelbtn" onclick="toggleBankTxCovered('${encodeURIComponent(rawDesc)}')">${(tag && tag.coveredByExtraIncome) ? '🏦 מהכנסה נוספת' : '🚗 מנסיעות'}</button>
                 <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})" style="font-size:13.5px; font-weight:700;">✏️ עריכה</button>
                 <button class="fuelbtn" onclick="flagBankTxSuspicious('${encodeURIComponent(bankTxKey(t))}','${encodeURIComponent(rawDesc)}',${amt},'${dateStr}')" style="color:var(--unpaid);">🔍 בבירור</button>
+                <button class="fuelbtn" onclick="splitTransactionFromGroup('${encodeURIComponent(bankTxKey(t))}')" title="אם זה מתערבב בטעות עם חיוב אחר שנקרא אותו דבר">✂️ הפרדה</button>
               </div>
             </div>
           </div>
@@ -2841,6 +2842,21 @@ function quickRenameMerchant(encodedRawDesc, currentDisplayName){
   if(trimmed){ merchantAliases[rawDesc] = trimmed; } else { delete merchantAliases[rawDesc]; }
   saveMerchantAliases();
   render();
+}
+function splitTransactionFromGroup(encodedKey){
+  const key = decodeURIComponent(encodedKey);
+  const tx = bankTransactions.find(t=>bankTxKey(t)===key);
+  if(!tx) return;
+  const label = prompt('שני חיובים שונים מגיעים מהבנק עם אותו שם בדיוק, אז המערכת חושבת שזה אותו דבר.\n\nתן שם ייחודי לחיוב הזה כדי להפריד אותו (למשל: "מימון ישיר - הלוואה קצרה"):', tx.description);
+  if(!label || !label.trim()) return;
+  const oldDesc = tx.description;
+  tx.description = label.trim();
+  saveBankTransactions();
+  // clean up any stale price-change alert task tied to the old shared identity
+  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('bankpricechange-') && t.id.includes(encodeURIComponent(oldDesc).slice(0,20))));
+  saveTasks();
+  render();
+  alert('הופרד בהצלחה. שים לב: אם תייבא בעתיד תנועה חדשה מאותו חיוב ספציפי, ייתכן שהיא תגיע עם השם המקורי המשותף שוב, ותצטרך לחזור על ההפרדה פעם נוספת עבורה.');
 }
 function openMerchantAliasSheet(encodedRawDesc, suggestedRemaining){
   const rawDesc = decodeURIComponent(encodedRawDesc);
