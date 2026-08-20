@@ -536,6 +536,7 @@ let bankTxFlags = {};
 let bankSyncStatus = null;
 let lastImportInfo = null;
 let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
+let approvedTxShowCount = 20; // how many approved bank transactions to show before "show more"
 let debtEditTargetId = null;
 let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
 let workExceptions = []; // [{date:'YYYY-MM-DD', working:false}] overrides the weekly pattern for a specific date
@@ -973,6 +974,10 @@ function saveLastImportInfo(){ storageSet(LAST_IMPORT_INFO_KEY, lastImportInfo);
 let importedRows = [];
 let importedHeaders = [];
 
+function showMoreApprovedTx(){
+  approvedTxShowCount += 20;
+  render();
+}
 function clearAllBankTransactions(){
   if(!confirm(`למחוק את כל ${bankTransactions.length} התנועות הקיימות?\n\nהזיכרון נשאר: שמות עסקים, תיאורים, סימוני "קבוע/חד פעמי", "מכוסה מהכנסה נוספת" ותנועות "בבירור" - כל זה יחול אוטומטית שוב על תנועות שתייבא מחדש עם אותו שם עסק.\n\nזה רק מנקה את רשימת התנועות עצמה, כדי שלא תהיה כפילות בייבוא הבא.`)) return;
   bankTransactions = [];
@@ -2587,7 +2592,9 @@ function renderDebtsScreen(){
         // find the most recent transaction id per description WITHIN the visible list, so we only
         // show the "latest occurrence" extras (note/installments chip/price-change) once per row,
         // but never hide them just because an even-newer unrelated transaction exists off-screen
-        const visibleTx = bankTransactions.filter(t=>isBankTxApproved(t) && !bankTxFlags[bankTxKey(t)]).slice(0,20);
+        const allApproved = bankTransactions.filter(t=>isBankTxApproved(t) && !bankTxFlags[bankTxKey(t)]);
+        const visibleTx = allApproved.slice(0,approvedTxShowCount);
+        const remaining = allApproved.length - visibleTx.length;
         const latestByDesc = {};
         [...visibleTx].sort((a,b)=> new Date(a.date) - new Date(b.date)).forEach(t=>{ latestByDesc[t.description||''] = t; });
         if(visibleTx.length===0) return `<div class="empty" style="padding:20px 20px 6px;"><span class="ic">🏦</span>עדיין אין תנועות מאושרות.</div>`;
@@ -2640,7 +2647,9 @@ function renderDebtsScreen(){
             </div>
           </div>
         `;
-        }).join('');
+        }).join('') + (remaining>0 ? `
+        <div class="addcard" onclick="showMoreApprovedTx()"><span>⬇️</span> הצג עוד ${Math.min(remaining,20)} (נשארו ${remaining})</div>
+        ` : '');
       })()}
     </div>
     ` : ''}
