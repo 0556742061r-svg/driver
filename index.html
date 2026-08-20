@@ -2876,9 +2876,9 @@ function openDebtSheet(id){
       <input id="debtDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="באיזה יום בחודש? (למשל 5)" value="${d && d.dueDay ? d.dueDay : ''}">
     </div>
     <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px; line-height:1.6;">אם ממלאים - נזכיר לך יום לפני ובאותו יום, וגם יופיע ישירות על הכרטיס</div>
-    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer; border:1px solid var(--accent-dim);">
       <input id="debtCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${d && d.coveredByExtraIncome ? 'checked' : ''}>
-      <span>🏦 החוב הזה מכוסה מהכנסה נוספת (עמלה וכו') - לא ייכנס ללחץ היעד היומי מנסיעות</span>
+      <span>🏦 החוב הזה מכוסה מהכנסה נוספת (עמלה וכו') - <b>לא</b> ייכנס ליעד היומי מנסיעות</span>
     </label>
     <div class="fieldlabel">הערה (לא חובה - כדי שתדע למה קבעת ככה בלי לפתוח שוב)</div>
     <textarea id="debtNote" class="noteinput" placeholder="למשל: סיכמנו שאני משלם ב-5 לחודש כי אז מגיע לי המשכורת">${d && d.note ? escHtml(d.note) : ''}</textarea>
@@ -3007,11 +3007,11 @@ function openRecurringSheet(id){
     <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px; line-height:1.6;">אם ממלאים - נזכיר לך באותו יום (אלא אם מסמנים למטה שזה יורד אוטומטית)</div>
     <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
       <input id="recAutomatic" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${r && r.isAutomatic ? 'checked' : ''}>
-      <span>🔁 יורד אוטומטית מהחשבון/הכרטיס (הוראת קבע)</span>
+      <span>🔁 יורד אוטומטית מהחשבון/הכרטיס (רק מבטל תזכורת - עדיין נכנס ליעד היומי מנסיעות)</span>
     </label>
-    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer; border:1px solid var(--accent-dim);">
       <input id="recCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${r && r.coveredByExtraIncome ? 'checked' : ''}>
-      <span>🏦 מכוסה מהכנסה נוספת (עמלה וכו') - לא ייכנס ללחץ היעד היומי מנסיעות</span>
+      <span>🏦 מכוסה מהכנסה נוספת (עמלה וכו') - <b>לא</b> ייכנס ליעד היומי מנסיעות</span>
     </label>
     <div class="fieldlabel">מספר תשלומים שנותרו (רק אם זו עסקה עם סוף, כמו הלוואה)</div>
     <input id="recInstallments" class="contactinput" style="width:100%; margin-bottom:4px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם זה חיוב קבוע לצמיתות" value="${r && r.installmentsLeft!=null ? r.installmentsLeft : ''}">
