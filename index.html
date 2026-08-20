@@ -2423,16 +2423,13 @@ function renderDebtsScreen(){
     </div>` : ''}
     <div class="listwrap" style="margin-top:0;">
       ${upcomingObligations.map(o=>{
-        const urgent = o.daysAway<=5 && !o.prepared;
+        const urgent = o.daysAway<=5;
         const whenLabel = o.daysAway<=0 ? 'היום' : (o.daysAway===1 ? 'מחר' : `בעוד ${o.daysAway} ימים`);
         return `
-        <div class="task ${urgent?'overdue':'ok'}" style="margin-bottom:8px; ${o.prepared?'opacity:.55;':''}">
-          <div class="taskmid" style="width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-            <div style="min-width:0;">
-              <div class="taskttl" style="font-size:13px;">${o.prepared?'✅ ':o.icon+' '}${escHtml(o.name)}</div>
-              <div class="tasktime">${fmt(o.amount)} · ${whenLabel}${o.type==='cardbilling' ? ' · סה"כ בכרטיסים' : (o.coveredByExtraIncome ? ' · 🏦 מהכנסה נוספת' : ' · 🚗 מנסיעות')}</div>
-            </div>
-            ${o.type!=='cardbilling' ? `<button class="fuelbtn" style="flex-shrink:0; padding:8px 12px; font-size:11.5px;" onclick="toggleObligationPrepared('${o.type}','${o.id}','${o.ym}')">${o.prepared ? '↩️' : '✔️ יש מאיפה'}</button>` : ''}
+        <div class="task ${urgent?'overdue':'ok'}" style="margin-bottom:8px;">
+          <div class="taskmid" style="width:100%;">
+            <div class="taskttl" style="font-size:13px;">${o.icon} ${escHtml(o.name)}</div>
+            <div class="tasktime">${fmt(o.amount)} · ${whenLabel}${o.type==='cardbilling' ? ' · סה"כ בכרטיסים' : (o.coveredByExtraIncome ? ' · 🏦 מהכנסה נוספת' : ' · 🚗 מנסיעות')}</div>
           </div>
         </div>
       `;
