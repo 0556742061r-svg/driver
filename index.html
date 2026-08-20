@@ -2516,7 +2516,7 @@ function renderDebtsScreen(){
           return `
           <div class="task" style="margin-bottom:8px; border-color:var(--unpaid); background:var(--unpaid-dim);">
             <div class="taskmid" style="width:100%;">
-              <div class="taskttl">🔍 ${escHtml(displayName)}</div>
+              <div class="taskttl" onclick="quickRenameMerchant('${encodeURIComponent(rawDesc)}','${encodeURIComponent(displayName)}')" style="cursor:pointer;">🔍 ${escHtml(displayName)} <span style="opacity:.4; font-size:11px;">✏️</span></div>
               <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${!isBankTxApproved(t) ? ` · <span style="color:var(--unpaid); font-weight:700;">עדיין לא אושרה</span>` : ''}</div>
               ${(existingTag && existingTag.coveredByExtraIncome) ? `<div class="dchips" style="margin-top:8px;"><div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
@@ -2556,7 +2556,7 @@ function renderDebtsScreen(){
           return `
           <div class="task" style="margin-bottom:8px; border-color:#5a3a26;">
             <div class="taskmid" style="width:100%;">
-              <div class="taskttl">${existingTag && existingTag.type==='recurring' ? '🔁 ' : ''}${escHtml(displayName)}</div>
+              <div class="taskttl" onclick="quickRenameMerchant('${encodeURIComponent(rawDesc)}','${encodeURIComponent(displayName)}')" style="cursor:pointer;">${existingTag && existingTag.type==='recurring' ? '🔁 ' : ''}${escHtml(displayName)} <span style="opacity:.4; font-size:11px;">✏️</span></div>
               <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${existingTag && existingTag.type==='recurring' ? ` · <span style="color:var(--accent);">קבוע כל חודש (הוגדר בעבר)</span>` : ''}</div>
               ${(t.installments || (existingTag && existingTag.coveredByExtraIncome)) ? `
               <div class="dchips" style="margin-top:8px;">
@@ -2619,7 +2619,7 @@ function renderDebtsScreen(){
           return `
           <div class="task ok" style="margin-bottom:8px;">
             <div class="taskmid" style="width:100%;">
-              <div class="taskttl">${isTaggedRecurring ? (isFinished?'✅ ':'🔁 ') : ''}${escHtml(displayName)}</div>
+              <div class="taskttl" onclick="quickRenameMerchant('${encodeURIComponent(rawDesc)}','${encodeURIComponent(displayName)}')" style="cursor:pointer;">${isTaggedRecurring ? (isFinished?'✅ ':'🔁 ') : ''}${escHtml(displayName)} <span style="opacity:.4; font-size:11px;">✏️</span></div>
               <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${merchantAliases[rawDesc] ? ` · <span style="opacity:.5;">מקורי: ${escHtml(rawDesc)}</span>` : ''}${isTaggedRecurring ? ` · <span style="color:var(--accent);">${isFinished ? 'הסתיים' : 'קבוע כל חודש'}</span>` : ''}</div>
               ${(isLatestForDesc && (tag && tag.installmentsLeft!=null || priceUpChip || t.installments || (tag && tag.coveredByExtraIncome))) ? `
               <div class="dchips" style="margin-top:8px;">
@@ -2824,6 +2824,15 @@ function renderDebtChart(){
   `;
 }
 
+function quickRenameMerchant(encodedRawDesc, currentDisplayName){
+  const rawDesc = decodeURIComponent(encodedRawDesc);
+  const newName = prompt('שם חדש לעסק הזה:', decodeURIComponent(currentDisplayName));
+  if(newName === null) return; // cancelled
+  const trimmed = newName.trim();
+  if(trimmed){ merchantAliases[rawDesc] = trimmed; } else { delete merchantAliases[rawDesc]; }
+  saveMerchantAliases();
+  render();
+}
 function openMerchantAliasSheet(encodedRawDesc, suggestedRemaining){
   const rawDesc = decodeURIComponent(encodedRawDesc);
   document.getElementById('overlay').classList.add('open');
