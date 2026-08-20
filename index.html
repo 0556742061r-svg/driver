@@ -1026,6 +1026,7 @@ function openImportMappingSheet(){
   // (the full original purchase, before installments split it up) - if both exist, "charge" wins
   const amountGuess = guessColumnIndex(['סכום חיוב','חיוב','amount','עלות','סכום']);
   const installmentsGuess = guessColumnIndex(['תשלום','installment']);
+  const cardGuess = guessColumnIndex(['כרטיס','card','ספרות']);
   const options = importedHeaders.map((h,i)=>`<option value="${i}">${escHtml(h||('עמודה '+(i+1)))}</option>`).join('');
   const optionsWithNone = `<option value="-1">— ללא —</option>` + options;
   sheet.innerHTML = `
@@ -1042,7 +1043,9 @@ function openImportMappingSheet(){
     <select id="importAmountCol" class="contactinput" style="width:100%; margin-bottom:4px;">${options}</select>
     <div style="font-size:10.5px; color:var(--muted); text-align:center; margin-bottom:16px; line-height:1.6;">אם יש בקובץ גם "סכום עסקה" וגם "סכום חיוב" - תבחר את "סכום חיוב" (מה שבאמת יורד לך החודש, לא הסכום המלא של עסקה בתשלומים)</div>
     <div class="fieldlabel">עמודת תשלומים (לא חובה - אם יש עמודה שמראה למשל "9/11")</div>
-    <select id="importInstallmentsCol" class="contactinput" style="width:100%; margin-bottom:16px;">${optionsWithNone}</select>
+    <select id="importInstallmentsCol" class="contactinput" style="width:100%; margin-bottom:12px;">${optionsWithNone}</select>
+    <div class="fieldlabel">עמודת מספר כרטיס / 4 ספרות אחרונות (לא חובה)</div>
+    <select id="importCardCol" class="contactinput" style="width:100%; margin-bottom:16px;">${optionsWithNone}</select>
     <div class="saverow">
       <button class="savebtn single" onclick="submitBankImport()">📥 ייבוא ${importedRows.length} שורות</button>
     </div>
@@ -1052,6 +1055,7 @@ function openImportMappingSheet(){
   if(descGuess>=0) document.getElementById('importDescCol').value = descGuess;
   if(amountGuess>=0) document.getElementById('importAmountCol').value = amountGuess;
   if(installmentsGuess>=0) document.getElementById('importInstallmentsCol').value = installmentsGuess;
+  if(cardGuess>=0) document.getElementById('importCardCol').value = cardGuess;
 }
 function parseImportedInstallments(val){
   if(val==null || val==='') return null;
@@ -1089,6 +1093,7 @@ function submitBankImport(){
   const descCol = parseInt(document.getElementById('importDescCol').value,10);
   const amountCol = parseInt(document.getElementById('importAmountCol').value,10);
   const installmentsCol = parseInt(document.getElementById('importInstallmentsCol').value,10);
+  const cardCol = parseInt(document.getElementById('importCardCol').value,10);
   let added = 0, skipped = 0;
   importedRows.forEach(row=>{
     const dateVal = parseImportedDate(row[dateCol]);
@@ -1096,7 +1101,8 @@ function submitBankImport(){
     const amount = parseImportedAmount(row[amountCol]);
     if(!dateVal || !desc || amount==null){ skipped++; return; }
     const installments = installmentsCol>=0 ? parseImportedInstallments(row[installmentsCol]) : null;
-    const newTx = { source: sourceLabelVal, account: null, date: dateVal, description: desc, amount, status: null, installments };
+    const account = cardCol>=0 ? (String(row[cardCol]||'').trim() || null) : null;
+    const newTx = { source: sourceLabelVal, account, date: dateVal, description: desc, amount, status: null, installments };
     const key = bankTxKey(newTx);
     if(bankTransactions.some(t=>bankTxKey(t)===key)){ skipped++; return; }
     bankTransactions.push(newTx);
@@ -2050,11 +2056,11 @@ function markBankTxPaid(encodedRawDesc){
   if(tag.installmentsLeft === 0) celebrateConfetti();
 }
 function checkBankRecurringPriceIncreases(){
-  const ym = currentYm();
   const byDesc = {};
   bankTransactions.forEach(t=>{
     const desc = t.description || '';
     if(!bankTxTags[desc] || bankTxTags[desc].type !== 'recurring') return;
+    if(!isBankTxApproved(t)) return;
     if(!byDesc[desc]) byDesc[desc] = [];
     byDesc[desc].push(t);
   });
@@ -2064,11 +2070,12 @@ function checkBankRecurringPriceIncreases(){
     if(sorted.length < 2) return;
     const latest = Math.abs(Number(sorted[0].amount)||0);
     const previous = Math.abs(Number(sorted[1].amount)||0);
-    if(latest > previous + 1){
-      const alertId = `bankpriceup-${desc}-${sorted[0].date}`;
+    if(Math.abs(latest - previous) > 1){
+      const alertId = `bankpricechange-${desc}-${sorted[0].date}`;
       if(!tasks.find(t=>t.id===alertId)){
         const displayName = merchantAliases[desc] || desc;
-        tasks.push({ id:alertId, title:`⚠️ המחיר של ${displayName} עלה: ${fmt(previous)} → ${fmt(latest)}`, deadline:Date.now(), done:false });
+        const arrow = latest > previous ? '⬆️' : '⬇️';
+        tasks.push({ id:alertId, title:`${arrow} הסכום של ${displayName} השתנה: ${fmt(previous)} → ${fmt(latest)}`, deadline:Date.now(), done:false });
         changed = true;
       }
     }
@@ -2602,7 +2609,9 @@ function renderDebtsScreen(){
               const prevAmt = Math.abs(Number(sameDesc[1].amount)||0);
               const curAmt = Math.abs(amt);
               if(curAmt > prevAmt + 1){
-                priceUpChip = `<div class="dchip overdue">⚠️ עלה מ-${fmt(prevAmt)} ל-${fmt(curAmt)}</div>`;
+                priceUpChip = `<div class="dchip overdue">⬆️ עלה מ-${fmt(prevAmt)} ל-${fmt(curAmt)}</div>`;
+              } else if(curAmt < prevAmt - 1){
+                priceUpChip = `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">⬇️ ירד מ-${fmt(prevAmt)} ל-${fmt(curAmt)}</div>`;
               }
             }
           }
