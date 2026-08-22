@@ -981,6 +981,22 @@ function saveBankTxTags(){
     storageSet(BANK_TX_TAGS_KEY, merged);
   }).catch(()=> storageSet(BANK_TX_TAGS_KEY, bankTxTags));
 }
+function guardedWriteBankTransactions(newArray, allowShrink){
+  // circuit breaker: refuse any write that would drastically shrink the transaction list
+  // unless explicitly flagged as intentional (the "delete all" button, or a single-item delete
+  // that only drops a couple of items). This is a general safety net against any future bug
+  // (in this code or anywhere else) that might otherwise silently wipe out real data.
+  const currentCount = bankTransactions.length;
+  const droppedTooMany = newArray.length < currentCount - 3 && newArray.length < currentCount * 0.7;
+  if(droppedTooMany && !allowShrink){
+    console.error('Blocked a suspicious bank transactions write: would drop from', currentCount, 'to', newArray.length);
+    alert(`⚠️ הפעולה נחסמה אוטומטית כמנגנון ביטחון - היא הייתה מוחקת בבת אחת ${currentCount - newArray.length} תנועות (מ-${currentCount} ל-${newArray.length}), וזה נראה חשוד. שום דבר לא נמחק.\n\nאם באמת התכוונת למחוק כמות גדולה, השתמש בכפתור "🗑️ מחיקת כל התנועות" הייעודי.`);
+    return false;
+  }
+  bankTransactions = newArray;
+  storageSet(BANK_TRANSACTIONS_KEY, newArray);
+  return true;
+}
 function saveBankTransactions(){
   // merge-safe: union with whatever's already on the server by transaction signature, so a
   // stale local tab can't wipe out transactions another tab already imported/approved
@@ -992,9 +1008,8 @@ function saveBankTransactions(){
       if(!existingKeys.has(k)){ merged.push(t); existingKeys.add(k); }
     });
     merged.sort((a,b)=> new Date(b.date) - new Date(a.date));
-    bankTransactions = merged;
-    storageSet(BANK_TRANSACTIONS_KEY, merged);
-  }).catch(()=> storageSet(BANK_TRANSACTIONS_KEY, bankTransactions));
+    guardedWriteBankTransactions(merged, false);
+  }).catch(()=> guardedWriteBankTransactions(bankTransactions, true));
 }
 function forceOverwriteBankTransactions(){
   // used only by the explicit "delete all" action, which intentionally shrinks the list
@@ -1013,17 +1028,20 @@ function showMoreApprovedTx(){
 function deleteSingleBankTx(encodedKey){
   if(!confirm('למחוק את התנועה הזו?')) return;
   const key = decodeURIComponent(encodedKey);
-  // fetch the latest server copy first (not just local state) so we don't accidentally
-  // undo something another tab/device added, then remove just this one transaction
+  // safety fix: NEVER trust a single source as "the truth" - union server + local first
+  // (so a bad/empty/stale server read can never wipe anything), then remove only the one
+  // specific transaction that was actually requested, through the guarded writer
   storageGet(BANK_TRANSACTIONS_KEY).then(serverArr=>{
-    const base = Array.isArray(serverArr) ? serverArr : bankTransactions;
-    const filtered = base.filter(t=>bankTxKey(t)!==key);
-    bankTransactions = filtered;
-    storageSet(BANK_TRANSACTIONS_KEY, filtered);
+    const server = Array.isArray(serverArr) ? serverArr : [];
+    const unionMap = new Map();
+    [...server, ...bankTransactions].forEach(t=>{ unionMap.set(bankTxKey(t), t); });
+    unionMap.delete(key);
+    const result = Array.from(unionMap.values());
+    guardedWriteBankTransactions(result, false);
     render();
   }).catch(()=>{
-    bankTransactions = bankTransactions.filter(t=>bankTxKey(t)!==key);
-    forceOverwriteBankTransactions();
+    const result = bankTransactions.filter(t=>bankTxKey(t)!==key);
+    guardedWriteBankTransactions(result, false);
     render();
   });
 }
