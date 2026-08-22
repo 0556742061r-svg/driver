@@ -2637,7 +2637,7 @@ function renderDebtsScreen(){
               ${(existingTag && existingTag.coveredByExtraIncome) ? `<div class="dchips" style="margin-top:8px;"><div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
                 ${!isBankTxApproved(t) ? `<button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(key)}')">✔️ אישור</button>` : ''}
-                <button class="fuelbtn" onclick="toggleBankTxCovered('${encodeURIComponent(rawDesc)}')">${(existingTag && existingTag.coveredByExtraIncome) ? '🏦 מהכנסה נוספת' : '🚗 מנסיעות'}</button>
+                <button class="fuelbtn" style="white-space:nowrap; font-size:11.5px; padding:10px 6px;" onclick="toggleBankTxCovered('${encodeURIComponent(rawDesc)}')">${(existingTag && existingTag.coveredByExtraIncome) ? '🏦 הכנסה נוספת' : '🚗 מנסיעות'}</button>
                 <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})">✏️ עריכה</button>
                 <button class="fuelbtn" onclick="resolveBankTxFlag('${encodeURIComponent(key)}')" style="color:var(--paid);">✅ טופל</button>
               </div>
@@ -2682,7 +2682,7 @@ function renderDebtsScreen(){
               ${(existingTag && existingTag.note) ? `<div class="dnote" style="margin-top:8px;"><span class="ic">📝</span><span>${escHtml(existingTag.note)} <span style="opacity:.6;">(תיאור שכבר הוגדר לעסק הזה)</span></span></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
                 <button class="fuelbtn" onclick="approveBankTx('${encodeURIComponent(key)}')">✔️ אישור</button>
-                <button class="fuelbtn" onclick="toggleBankTxCovered('${encodeURIComponent(rawDesc)}')">${(existingTag && existingTag.coveredByExtraIncome) ? '🏦 מהכנסה נוספת' : '🚗 מנסיעות'}</button>
+                <button class="fuelbtn" style="white-space:nowrap; font-size:11.5px; padding:10px 6px;" onclick="toggleBankTxCovered('${encodeURIComponent(rawDesc)}')">${(existingTag && existingTag.coveredByExtraIncome) ? '🏦 הכנסה נוספת' : '🚗 מנסיעות'}</button>
                 <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})">✏️ עריכה</button>
                 <button class="fuelbtn" onclick="flagBankTxSuspicious('${encodeURIComponent(key)}','${encodeURIComponent(rawDesc)}',${amt},'${dateStr}')" style="color:var(--unpaid);">🔍 בבירור</button>
               </div>
@@ -2760,7 +2760,7 @@ function renderDebtsScreen(){
               ${(isLatestForDesc && tag && tag.note) ? `<div class="dnote" style="margin-top:8px;"><span class="ic">📝</span><span>${escHtml(tag.note)}</span></div>` : ''}
               <div class="dactions" style="margin-top:10px;">
                 ${(isLatestForDesc && tag && tag.installmentsLeft!=null && !isFinished) ? `<button class="fuelbtn" onclick="markBankTxPaid('${encodeURIComponent(rawDesc)}')">✔️ תשלום זה נגבה</button>` : ''}
-                <button class="fuelbtn" onclick="toggleBankTxCovered('${encodeURIComponent(rawDesc)}')">${(tag && tag.coveredByExtraIncome) ? '🏦 מהכנסה נוספת' : '🚗 מנסיעות'}</button>
+                <button class="fuelbtn" style="white-space:nowrap; font-size:11.5px; padding:10px 6px;" onclick="toggleBankTxCovered('${encodeURIComponent(rawDesc)}')">${(tag && tag.coveredByExtraIncome) ? '🏦 הכנסה נוספת' : '🚗 מנסיעות'}</button>
                 <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})" style="font-size:13.5px; font-weight:700;">✏️ עריכה</button>
                 <button class="fuelbtn" onclick="flagBankTxSuspicious('${encodeURIComponent(bankTxKey(t))}','${encodeURIComponent(rawDesc)}',${amt},'${dateStr}')" style="color:var(--unpaid);">🔍 בבירור</button>
                 <button class="fuelbtn" onclick="splitTransactionFromGroup('${encodeURIComponent(bankTxKey(t))}')" title="אם זה מתערבב בטעות עם חיוב אחר שנקרא אותו דבר">✂️ הפרדה</button>
