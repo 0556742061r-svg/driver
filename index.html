@@ -972,8 +972,34 @@ function saveRecurring(){ storageSet(RECURRING_KEY, recurringCharges); }
 function saveExtraIncomes(){ storageSet(EXTRA_INCOME_KEY, extraIncomes); }
 function saveCardBillingDay(){ storageSet(CARD_BILLING_DAY_KEY, cardBillingDay!=null ? [cardBillingDay] : []); }
 function saveMerchantAliases(){ storageSet(MERCHANT_ALIASES_KEY, merchantAliases); }
-function saveBankTxTags(){ storageSet(BANK_TX_TAGS_KEY, bankTxTags); }
-function saveBankTransactions(){ storageSet(BANK_TRANSACTIONS_KEY, bankTransactions); }
+function saveBankTxTags(){
+  // merge-safe: fetch the latest server copy first, so a stale local tab can't wipe out
+  // tags/edits another tab already saved in the meantime
+  storageGet(BANK_TX_TAGS_KEY).then(serverVal=>{
+    const merged = Object.assign({}, serverVal||{}, bankTxTags);
+    bankTxTags = merged;
+    storageSet(BANK_TX_TAGS_KEY, merged);
+  }).catch(()=> storageSet(BANK_TX_TAGS_KEY, bankTxTags));
+}
+function saveBankTransactions(){
+  // merge-safe: union with whatever's already on the server by transaction signature, so a
+  // stale local tab can't wipe out transactions another tab already imported/approved
+  storageGet(BANK_TRANSACTIONS_KEY).then(serverArr=>{
+    const merged = Array.isArray(serverArr) ? [...serverArr] : [];
+    const existingKeys = new Set(merged.map(bankTxKey));
+    bankTransactions.forEach(t=>{
+      const k = bankTxKey(t);
+      if(!existingKeys.has(k)){ merged.push(t); existingKeys.add(k); }
+    });
+    merged.sort((a,b)=> new Date(b.date) - new Date(a.date));
+    bankTransactions = merged;
+    storageSet(BANK_TRANSACTIONS_KEY, merged);
+  }).catch(()=> storageSet(BANK_TRANSACTIONS_KEY, bankTransactions));
+}
+function forceOverwriteBankTransactions(){
+  // used only by the explicit "delete all" action, which intentionally shrinks the list
+  storageSet(BANK_TRANSACTIONS_KEY, bankTransactions);
+}
 function saveLastImportInfo(){ storageSet(LAST_IMPORT_INFO_KEY, lastImportInfo); }
 
 // ============ Manual Excel/CSV import (replaces the old GitHub-based auto sync) ============
@@ -985,9 +1011,9 @@ function showMoreApprovedTx(){
   render();
 }
 function clearAllBankTransactions(){
-  if(!confirm(`למחוק את כל ${bankTransactions.length} התנועות הקיימות?\n\nהזיכרון נשאר: שמות עסקים, תיאורים, סימוני "קבוע/חד פעמי", "מכוסה מהכנסה נוספת" ותנועות "בבירור" - כל זה יחול אוטומטית שוב על תנועות שתייבא מחדש עם אותו שם עסק.\n\nזה רק מנקה את רשימת התנועות עצמה, כדי שלא תהיה כפילות בייבוא הבא.`)) return;
+  if(!confirm(`למחוק את כל ${bankTransactions.length} התנועות הקיימות?\n\nהזיכרון נשאר: שמות עסקים, תיאורים, סימוני "קבוע/חד פעמי", "מכוסה מהכנסה נוספת" ותנועות "בבירור" - כל זה יחול אוטומטית שוב על תנועות שתייבא מחדש עם אותו שם עסק.\n\nזה רק מנקה את רשימת התנועות עצמה, כדי שלא תהיה כפילות בייבוא הבא.\n\nחשוב: ודא שהאפליקציה לא פתוחה כרגע במכשיר/טאב נוסף, אחרת ייתכן שהיא "תחזיר" את התנועות מיד.`)) return;
   bankTransactions = [];
-  saveBankTransactions();
+  forceOverwriteBankTransactions();
   render();
 }
 function triggerBankImport(){
@@ -1131,8 +1157,20 @@ function submitBankImport(){
 }
 // ============ end manual import ============
 
-function saveBankTxApprovals(){ storageSet(BANK_TX_APPROVALS_KEY, bankTxApprovals); }
-function saveBankTxFlags(){ storageSet(BANK_TX_FLAGS_KEY, bankTxFlags); }
+function saveBankTxApprovals(){
+  storageGet(BANK_TX_APPROVALS_KEY).then(serverVal=>{
+    const merged = Object.assign({}, serverVal||{}, bankTxApprovals);
+    bankTxApprovals = merged;
+    storageSet(BANK_TX_APPROVALS_KEY, merged);
+  }).catch(()=> storageSet(BANK_TX_APPROVALS_KEY, bankTxApprovals));
+}
+function saveBankTxFlags(){
+  storageGet(BANK_TX_FLAGS_KEY).then(serverVal=>{
+    const merged = Object.assign({}, serverVal||{}, bankTxFlags);
+    bankTxFlags = merged;
+    storageSet(BANK_TX_FLAGS_KEY, merged);
+  }).catch(()=> storageSet(BANK_TX_FLAGS_KEY, bankTxFlags));
+}
 function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
 function saveWorkExceptions(){ storageSet(WORK_EXCEPTIONS_KEY, workExceptions); }
 
