@@ -2691,12 +2691,14 @@ function renderDebtsScreen(){
           const displayName = merchantAliases[rawDesc] || rawDesc;
           const existingTag = bankTxTags[rawDesc] || null;
           const key = bankTxKey(t);
+          const nowCheck = new Date();
+          const isOffMonth = dt.getFullYear()!==nowCheck.getFullYear() || dt.getMonth()!==nowCheck.getMonth();
           return `
-          <div class="task" style="margin-bottom:8px; border-color:${t.offMonth?'var(--unpaid)':'#5a3a26'};">
+          <div class="task" style="margin-bottom:8px; border-color:${isOffMonth?'var(--unpaid)':'#5a3a26'};">
             <div class="taskmid" style="width:100%;">
               <div class="taskttl" onclick="quickRenameMerchant('${encodeURIComponent(rawDesc)}','${encodeURIComponent(displayName)}')" style="cursor:pointer;">${existingTag && existingTag.type==='recurring' ? '🔁 ' : ''}${escHtml(displayName)} <span style="opacity:.4; font-size:11px;">✏️</span></div>
               <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${existingTag && existingTag.type==='recurring' ? ` · <span style="color:var(--accent);">קבוע כל חודש (הוגדר בעבר)</span>` : ''}</div>
-              ${t.offMonth ? `<div class="dchips" style="margin-top:8px;"><div class="dchip overdue">⚠️ מתאריך שהוא לא החודש הנוכחי</div></div>` : ''}
+              ${isOffMonth ? `<div class="dchips" style="margin-top:8px;"><div class="dchip overdue">⚠️ מתאריך שהוא לא החודש הנוכחי</div></div>` : ''}
               ${(t.installments || (existingTag && existingTag.coveredByExtraIncome)) ? `
               <div class="dchips" style="margin-top:8px;">
                 ${existingTag && existingTag.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
