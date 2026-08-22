@@ -1010,6 +1010,23 @@ function showMoreApprovedTx(){
   approvedTxShowCount += 20;
   render();
 }
+function deleteSingleBankTx(encodedKey){
+  if(!confirm('למחוק את התנועה הזו?')) return;
+  const key = decodeURIComponent(encodedKey);
+  // fetch the latest server copy first (not just local state) so we don't accidentally
+  // undo something another tab/device added, then remove just this one transaction
+  storageGet(BANK_TRANSACTIONS_KEY).then(serverArr=>{
+    const base = Array.isArray(serverArr) ? serverArr : bankTransactions;
+    const filtered = base.filter(t=>bankTxKey(t)!==key);
+    bankTransactions = filtered;
+    storageSet(BANK_TRANSACTIONS_KEY, filtered);
+    render();
+  }).catch(()=>{
+    bankTransactions = bankTransactions.filter(t=>bankTxKey(t)!==key);
+    forceOverwriteBankTransactions();
+    render();
+  });
+}
 function clearAllBankTransactions(){
   if(!confirm(`למחוק את כל ${bankTransactions.length} התנועות הקיימות?\n\nהזיכרון נשאר: שמות עסקים, תיאורים, סימוני "קבוע/חד פעמי", "מכוסה מהכנסה נוספת" ותנועות "בבירור" - כל זה יחול אוטומטית שוב על תנועות שתייבא מחדש עם אותו שם עסק.\n\nזה רק מנקה את רשימת התנועות עצמה, כדי שלא תהיה כפילות בייבוא הבא.\n\nחשוב: ודא שהאפליקציה לא פתוחה כרגע במכשיר/טאב נוסף, אחרת ייתכן שהיא "תחזיר" את התנועות מיד.`)) return;
   bankTransactions = [];
@@ -1131,7 +1148,9 @@ function submitBankImport(){
   const amountCol = parseInt(document.getElementById('importAmountCol').value,10);
   const installmentsCol = parseInt(document.getElementById('importInstallmentsCol').value,10);
   const cardCol = parseInt(document.getElementById('importCardCol').value,10);
-  let added = 0, skipped = 0;
+  const now = new Date();
+  const curYear = now.getFullYear(), curMonth = now.getMonth();
+  let added = 0, skipped = 0, offMonthCount = 0;
   importedRows.forEach(row=>{
     const dateVal = parseImportedDate(row[dateCol]);
     const desc = String(row[descCol]||'').trim();
@@ -1139,11 +1158,14 @@ function submitBankImport(){
     if(!dateVal || !desc || amount==null){ skipped++; return; }
     const installments = installmentsCol>=0 ? parseImportedInstallments(row[installmentsCol]) : null;
     const account = cardCol>=0 ? (String(row[cardCol]||'').trim() || null) : null;
-    const newTx = { source: sourceLabelVal, account, date: dateVal, description: desc, amount, status: null, installments };
+    const txDate = new Date(dateVal);
+    const offMonth = txDate.getFullYear()!==curYear || txDate.getMonth()!==curMonth;
+    const newTx = { source: sourceLabelVal, account, date: dateVal, description: desc, amount, status: null, installments, offMonth };
     const key = bankTxKey(newTx);
     if(bankTransactions.some(t=>bankTxKey(t)===key)){ skipped++; return; }
     bankTransactions.push(newTx);
     added++;
+    if(offMonth) offMonthCount++;
   });
   bankTransactions.sort((a,b)=> new Date(b.date) - new Date(a.date));
   saveBankTransactions();
@@ -1153,7 +1175,7 @@ function submitBankImport(){
   importedHeaders = [];
   closeSheet();
   render();
-  alert(`יובאו ${added} תנועות חדשות${skipped>0 ? ` (${skipped} דולגו - כבר קיימות או חסר מידע)` : ''}.`);
+  alert(`יובאו ${added} תנועות חדשות${skipped>0 ? ` (${skipped} דולגו - כבר קיימות או חסר מידע)` : ''}.${offMonthCount>0 ? `\n\n⚠️ שים לב: ${offMonthCount} מהן מתאריך שהוא לא בחודש הנוכחי - יופיעו מסומנות ברשימת "ממתינות לאישור".` : ''}`);
 }
 // ============ end manual import ============
 
@@ -2670,10 +2692,11 @@ function renderDebtsScreen(){
           const existingTag = bankTxTags[rawDesc] || null;
           const key = bankTxKey(t);
           return `
-          <div class="task" style="margin-bottom:8px; border-color:#5a3a26;">
+          <div class="task" style="margin-bottom:8px; border-color:${t.offMonth?'var(--unpaid)':'#5a3a26'};">
             <div class="taskmid" style="width:100%;">
               <div class="taskttl" onclick="quickRenameMerchant('${encodeURIComponent(rawDesc)}','${encodeURIComponent(displayName)}')" style="cursor:pointer;">${existingTag && existingTag.type==='recurring' ? '🔁 ' : ''}${escHtml(displayName)} <span style="opacity:.4; font-size:11px;">✏️</span></div>
               <div class="tasktime">${sourceLabel(t.source)}${t.account?` (${escHtml(String(t.account))})`:''} · ${dateStr} · ${fmt(Math.abs(amt))}${existingTag && existingTag.type==='recurring' ? ` · <span style="color:var(--accent);">קבוע כל חודש (הוגדר בעבר)</span>` : ''}</div>
+              ${t.offMonth ? `<div class="dchips" style="margin-top:8px;"><div class="dchip overdue">⚠️ מתאריך שהוא לא החודש הנוכחי</div></div>` : ''}
               ${(t.installments || (existingTag && existingTag.coveredByExtraIncome)) ? `
               <div class="dchips" style="margin-top:8px;">
                 ${existingTag && existingTag.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : ''}
@@ -2685,6 +2708,7 @@ function renderDebtsScreen(){
                 <button class="fuelbtn" style="white-space:nowrap; font-size:11.5px; padding:10px 6px;" onclick="toggleBankTxCovered('${encodeURIComponent(rawDesc)}')">${(existingTag && existingTag.coveredByExtraIncome) ? '🏦 הכנסה נוספת' : '🚗 מנסיעות'}</button>
                 <button class="fuelbtn" onclick="openMerchantAliasSheet('${encodeURIComponent(rawDesc)}', ${t.installments ? (t.installments.total - t.installments.number) : 'null'})">✏️ עריכה</button>
                 <button class="fuelbtn" onclick="flagBankTxSuspicious('${encodeURIComponent(key)}','${encodeURIComponent(rawDesc)}',${amt},'${dateStr}')" style="color:var(--unpaid);">🔍 בבירור</button>
+                <button class="fuelbtn" onclick="deleteSingleBankTx('${encodeURIComponent(key)}')" style="color:var(--unpaid);">🗑️ מחיקה</button>
               </div>
             </div>
           </div>
