@@ -512,7 +512,6 @@ const MERCHANT_ALIASES_KEY = 'merchant_aliases_v1'; // maps raw bank description
 const BANK_TX_TAGS_KEY = 'banktxtags_v1'; // maps raw bank description -> {type:'recurring'|'onetime'}, remembered forever
 const BANK_TX_APPROVALS_KEY = 'banktxapprovals_v1'; // maps a stable transaction signature -> true once you've reviewed & approved it
 const BANK_TX_FLAGS_KEY = 'banktxflags_v1'; // maps a stable transaction signature -> {status:'suspicious', flaggedAt} - stays until you resolve it
-const BANK_SYNC_STATUS_KEY = 'banksyncstatus_v1'; // written externally by the bank-sync Action - tells us if a source (Isracard/Max) failed on the last run
 const LAST_IMPORT_INFO_KEY = 'lastimportinfo_v1'; // {source, count, importedAt} for the most recent manual Excel/CSV import
 const BANK_TX_BACKUP_KEY = 'banktxbackup_v1'; // rolling safety backups of bankTransactions, taken automatically before every write
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
@@ -538,7 +537,6 @@ let merchantAliases = {};
 let bankTxTags = {};
 let bankTxApprovals = {};
 let bankTxFlags = {};
-let bankSyncStatus = null;
 let lastImportInfo = null;
 let bankTxBackups = []; // [{timestamp, count, data}] most recent first
 let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
@@ -886,11 +884,6 @@ async function attachFirestoreListeners(){
     bankTxFlags = (d && d.value) ? JSON.parse(d.value) : {};
     render();
   }, err=>console.error(err)));
-  fbUnsubscribers.push(fbDocRef(BANK_SYNC_STATUS_KEY).onSnapshot(doc=>{
-    const d = doc.data();
-    bankSyncStatus = (d && d.value) ? JSON.parse(d.value) : null;
-    render();
-  }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(LAST_IMPORT_INFO_KEY).onSnapshot(doc=>{
     const d = doc.data();
     lastImportInfo = (d && d.value) ? JSON.parse(d.value) : null;
@@ -964,7 +957,6 @@ async function load(){
   bankTxTags = (await storageGet(BANK_TX_TAGS_KEY)) || {};
   bankTxApprovals = (await storageGet(BANK_TX_APPROVALS_KEY)) || {};
   bankTxFlags = (await storageGet(BANK_TX_FLAGS_KEY)) || {};
-  bankSyncStatus = (await storageGet(BANK_SYNC_STATUS_KEY)) || null;
   bankTransactions = await storageGet(BANK_TRANSACTIONS_KEY); // local-only fallback mode doesn't need sharding
   lastImportInfo = (await storageGet(LAST_IMPORT_INFO_KEY)) || null;
   bankTxBackups = (await storageGet(BANK_TX_BACKUP_KEY)) || [];
@@ -2446,22 +2438,17 @@ function markRecurringPaid(id){
   if(r.installmentsLeft===0) celebrateConfetti();
 }
 
-function bankSyncHasFailure(){
-  if(!bankSyncStatus) return false;
-  return (bankSyncStatus.isracard && !bankSyncStatus.isracard.success) || (bankSyncStatus.max && !bankSyncStatus.max.success);
-}
 function renderDebtEntryPoint(){
   const remaining = totalDebtRemaining();
   const recurringTotal = totalRecurringMonthly();
-  const syncWarning = bankSyncHasFailure() ? ` <span style="color:var(--unpaid);">⚠️</span>` : '';
   if(debts.length===0 && recurringCharges.length===0){
     return `<div class="workdaybar" style="cursor:pointer;" onclick="openDebtsScreen()">
-      <span>💳 חובות והוצאות קבועות${syncWarning}</span>
+      <span>💳 חובות והוצאות קבועות</span>
       <span class="wdbtn">פתיחה</span>
     </div>`;
   }
   return `<div class="workdaybar" style="cursor:pointer;" onclick="openDebtsScreen()">
-    <span>💳 חוב: <b style="color:var(--unpaid); font-family:'Roboto Mono',monospace;">${fmt(remaining)}</b>${recurringTotal>0 ? ` · קבוע: <b style="color:var(--muted); font-family:'Roboto Mono',monospace;">${fmt(recurringTotal)}</b>/חודש` : ''}${syncWarning}</span>
+    <span>💳 חוב: <b style="color:var(--unpaid); font-family:'Roboto Mono',monospace;">${fmt(remaining)}</b>${recurringTotal>0 ? ` · קבוע: <b style="color:var(--muted); font-family:'Roboto Mono',monospace;">${fmt(recurringTotal)}</b>/חודש` : ''}</span>
     <span class="wdbtn">ניהול</span>
   </div>`;
 }
@@ -2628,23 +2615,6 @@ function renderDebtsScreen(){
     </header>
 
     <div class="wdbtn" style="display:inline-block; margin:0 18px 14px; cursor:pointer; color:var(--unpaid); border-color:#5a3a26;" onclick="fullResetDebtsPage()">🗑️ איפוס מלא של העמוד - התחלה מחדש</div>
-
-    ${(()=>{
-      if(!bankSyncStatus) return '';
-      const failed = [];
-      if(bankSyncStatus.isracard && !bankSyncStatus.isracard.success) failed.push({ name:'ישראכרט', error:bankSyncStatus.isracard.error });
-      if(bankSyncStatus.max && !bankSyncStatus.max.success) failed.push({ name:'מקס', error:bankSyncStatus.max.error });
-      if(failed.length===0) return '';
-      const lastRun = bankSyncStatus.lastRunAt ? new Date(bankSyncStatus.lastRunAt).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}) : '';
-      return `
-      <div class="dcard" style="margin:0 18px 14px; border-color:var(--unpaid); background:var(--unpaid-dim);">
-        <div style="font-size:13px; font-weight:700; color:var(--unpaid); margin-bottom:6px;">⚠️ המשיכה מ${failed.map(f=>f.name).join(' ו-')} נכשלה בריצה האחרונה</div>
-        <div style="font-size:11.5px; color:var(--muted); line-height:1.6;">
-          ריצה אחרונה: ${lastRun}. ייתכן שחסרות תנועות מ${failed.map(f=>f.name).join('/')} עד שהבעיה תיפתר ותרוץ שוב בהצלחה. זה בדרך כלל תקלה זמנית מצד חברת האשראי, לא בעיה אצלך.
-        </div>
-      </div>
-      `;
-    })()}
 
     <div class="meter">
       <div class="label">סה"כ חוב שנותר</div>
