@@ -505,7 +505,9 @@ const DEBT_PAYMENTS_KEY = 'debtpayments_v1';
 const RECURRING_KEY = 'recurring_v1';
 const EXTRA_INCOME_KEY = 'extraincome_v1';
 const CARD_BILLING_DAY_KEY = 'cardbillingday_v1'; // day of month Isracard/Max actually charge your account (all purchases as one lump sum)
-const BANK_TRANSACTIONS_KEY = 'banktx_v1'; // populated by manual Excel/CSV import from any bank or card company
+const BANK_TRANSACTIONS_KEY = 'banktx_v1'; // legacy single-document key, kept for migration only
+const BANK_TX_SHARD_COUNT = 6; // transactions are now split across this many documents (~600KB each = ~3.6MB total) instead of one, since a single Firestore document maxes out around 1MB
+function bankTxShardKey(i){ return `${BANK_TRANSACTIONS_KEY}_s${i}`; }
 const MERCHANT_ALIASES_KEY = 'merchant_aliases_v1'; // maps raw bank description -> friendly name you choose, remembered forever
 const BANK_TX_TAGS_KEY = 'banktxtags_v1'; // maps raw bank description -> {type:'recurring'|'onetime'}, remembered forever
 const BANK_TX_APPROVALS_KEY = 'banktxapprovals_v1'; // maps a stable transaction signature -> true once you've reviewed & approved it
@@ -513,6 +515,7 @@ const BANK_TX_FLAGS_KEY = 'banktxflags_v1'; // maps a stable transaction signatu
 const BANK_SYNC_STATUS_KEY = 'banksyncstatus_v1'; // written externally by the bank-sync Action - tells us if a source (Isracard/Max) failed on the last run
 const LAST_IMPORT_INFO_KEY = 'lastimportinfo_v1'; // {source, count, importedAt} for the most recent manual Excel/CSV import
 const CARD_REGISTRY_KEY = 'cardregistry_v1'; // [{id, name, last4}] - the cards/accounts you track, to avoid duplicate imports and see per-card status
+const BANK_TX_BACKUP_KEY = 'banktxbackup_v1'; // rolling safety backups of bankTransactions, taken automatically before every write
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
 const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
@@ -530,6 +533,8 @@ let recurringCharges = [];
 let extraIncomes = [];
 let cardBillingDay = null;
 let bankTransactions = [];
+let bankTxShards = new Array(BANK_TX_SHARD_COUNT).fill(null).map(()=>[]);
+let bankTxLegacy = []; // data still sitting under the old single-document key, read once for migration
 let merchantAliases = {};
 let bankTxTags = {};
 let bankTxApprovals = {};
@@ -537,6 +542,7 @@ let bankTxFlags = {};
 let bankSyncStatus = null;
 let lastImportInfo = null;
 let cardRegistry = [];
+let bankTxBackups = []; // [{timestamp, count, data}] most recent first
 let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
 let approvedTxShowCount = 20; // how many approved bank transactions to show before "show more"
 let debtEditTargetId = null;
@@ -847,12 +853,24 @@ async function attachFirestoreListeners(){
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(BANK_TRANSACTIONS_KEY).onSnapshot(doc=>{
     const d = doc.data();
-    bankTransactions = (d && d.value) ? JSON.parse(d.value) : [];
+    bankTxLegacy = (d && d.value) ? JSON.parse(d.value) : [];
+    recomputeBankTransactionsFromShards();
     render();
     checkBankRecurringPriceIncreases();
     checkMixedMerchantAlerts();
     autoApplyInstallmentSuggestions();
   }, err=>console.error(err)));
+  for(let shardI=0; shardI<BANK_TX_SHARD_COUNT; shardI++){
+    fbUnsubscribers.push(fbDocRef(bankTxShardKey(shardI)).onSnapshot(doc=>{
+      const d = doc.data();
+      bankTxShards[shardI] = (d && d.value) ? JSON.parse(d.value) : [];
+      recomputeBankTransactionsFromShards();
+      render();
+      checkBankRecurringPriceIncreases();
+      checkMixedMerchantAlerts();
+      autoApplyInstallmentSuggestions();
+    }, err=>console.error(err)));
+  }
   fbUnsubscribers.push(fbDocRef(MERCHANT_ALIASES_KEY).onSnapshot(doc=>{
     const d = doc.data();
     merchantAliases = (d && d.value) ? JSON.parse(d.value) : {};
@@ -890,6 +908,10 @@ async function attachFirestoreListeners(){
     const d = doc.data();
     cardRegistry = (d && d.value) ? JSON.parse(d.value) : [];
     render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(BANK_TX_BACKUP_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    bankTxBackups = (d && d.value) ? JSON.parse(d.value) : [];
   }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
     const d = doc.data();
@@ -956,8 +978,10 @@ async function load(){
   bankTxApprovals = (await storageGet(BANK_TX_APPROVALS_KEY)) || {};
   bankTxFlags = (await storageGet(BANK_TX_FLAGS_KEY)) || {};
   bankSyncStatus = (await storageGet(BANK_SYNC_STATUS_KEY)) || null;
+  bankTransactions = await storageGet(BANK_TRANSACTIONS_KEY); // local-only fallback mode doesn't need sharding
   lastImportInfo = (await storageGet(LAST_IMPORT_INFO_KEY)) || null;
   cardRegistry = (await storageGet(CARD_REGISTRY_KEY)) || [];
+  bankTxBackups = (await storageGet(BANK_TX_BACKUP_KEY)) || [];
   const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
   if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
   workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
@@ -989,6 +1013,35 @@ function saveBankTxTags(){
     storageSet(BANK_TX_TAGS_KEY, merged);
   }).catch(()=> storageSet(BANK_TX_TAGS_KEY, bankTxTags));
 }
+function backupBankTransactionsSnapshot(dataToBackup){
+  // rolling safety backup, taken right before every write - keeps the last 5 so you can always
+  // roll back a few steps even if something goes wrong for a reason we haven't caught yet
+  if(!dataToBackup || dataToBackup.length===0) return; // don't bother backing up "nothing"
+  const snapshot = { timestamp: Date.now(), count: dataToBackup.length, data: dataToBackup };
+  storageGet(BANK_TX_BACKUP_KEY).then(existing=>{
+    const list = Array.isArray(existing) ? existing : [];
+    const updated = [snapshot, ...list].slice(0,5);
+    bankTxBackups = updated;
+    storageSet(BANK_TX_BACKUP_KEY, updated);
+  }).catch(()=>{
+    const updated = [snapshot, ...bankTxBackups].slice(0,5);
+    bankTxBackups = updated;
+    storageSet(BANK_TX_BACKUP_KEY, updated);
+  });
+}
+function restoreBankTxBackup(index){
+  const backup = bankTxBackups[index];
+  if(!backup) return;
+  if(!confirm(`לשחזר לגיבוי מ-${new Date(backup.timestamp).toLocaleString('he-IL')} (${backup.count} תנועות)?\n\nזה ימזג את הגיבוי עם מה שיש עכשיו (איחוד, לא מחיקה) - שום דבר לא יימחק, רק יתווסף מה שהיה בגיבוי ואולי חסר עכשיו.`)) return;
+  fetchAllBankTransactionsFromServer().then(current=>{
+    const unionMap = new Map();
+    [...current, ...backup.data].forEach(t=>{ unionMap.set(bankTxKey(t), t); });
+    const result = Array.from(unionMap.values());
+    guardedWriteBankTransactions(result, true); // restore is an explicit union - growth is expected and fine
+    render();
+    alert(`שוחזר. יש עכשיו ${result.length} תנועות.`);
+  });
+}
 function guardedWriteBankTransactions(newArray, allowShrink, referenceCount){
   // circuit breaker: refuse any write that would drastically shrink the transaction list
   // unless explicitly flagged as intentional (the "delete all" button, or a single-item delete
@@ -1006,15 +1059,55 @@ function guardedWriteBankTransactions(newArray, allowShrink, referenceCount){
     alert(`⚠️ הפעולה נחסמה אוטומטית כמנגנון ביטחון - היא הייתה מוחקת בבת אחת ${currentCount - newArray.length} תנועות (מ-${currentCount} ל-${newArray.length}), וזה נראה חשוד. שום דבר לא נמחק.\n\nאם באמת התכוונת למחוק כמות גדולה, השתמש בכפתור "🗑️ מחיקת כל התנועות" הייעודי.`);
     return false;
   }
-  bankTransactions = newArray;
-  storageSet(BANK_TRANSACTIONS_KEY, newArray);
+  backupBankTransactionsSnapshot(bankTransactions); // snapshot the state right before we overwrite it
+  // split across BANK_TX_SHARD_COUNT documents (~600KB each) instead of trimming old history -
+  // this gives roughly 4-5x more total room than a single Firestore document allows
+  const sorted = [...newArray].sort((a,b)=> new Date(b.date) - new Date(a.date));
+  const shardArrays = [];
+  let current = [];
+  sorted.forEach(t=>{
+    current.push(t);
+    if(JSON.stringify(current).length > 600000){
+      current.pop();
+      shardArrays.push(current);
+      current = [t];
+    }
+  });
+  if(current.length>0) shardArrays.push(current);
+  let overflowCount = 0;
+  while(shardArrays.length > BANK_TX_SHARD_COUNT){
+    const overflow = shardArrays.pop();
+    overflowCount += overflow.length;
+  }
+  if(overflowCount>0){
+    alert(`⚠️ יש כרגע יותר תנועות ממה שיש מקום לשמור (גם עם החלוקה למספר קבצים) - ${overflowCount} מהתנועות הכי ישנות לא נשמרו הפעם. שום דבר לא אבד לצמיתות - תוכל לייבא אותן שוב בעתיד במידת הצורך.`);
+  }
+  bankTxLegacy = []; // migrate away from the old single-document key
+  bankTxShards = new Array(BANK_TX_SHARD_COUNT).fill(null).map((_,i)=> shardArrays[i] || []);
+  bankTransactions = shardArrays.flat();
+  storageSet(BANK_TRANSACTIONS_KEY, []); // clear the legacy doc now that data lives in shards
+  const writePromises = [];
+  for(let i=0;i<BANK_TX_SHARD_COUNT;i++){
+    const shardData = shardArrays[i] || [];
+    const approxSizeKB = Math.round(JSON.stringify(shardData).length / 1024);
+    writePromises.push(
+      storageSet(bankTxShardKey(i), shardData).then(result=>{
+        if(!result){
+          console.error(`storageSet returned falsy for shard ${i} - write may have failed`, {approxSizeKB, count: shardData.length});
+        }
+      }).catch(err=>{
+        console.error(`storageSet threw an error for shard ${i}`, err, {approxSizeKB, count: shardData.length});
+        alert(`⚠️ השמירה נכשלה בפועל עבור חלק מהתנועות (שגיאה: ${err && err.message ? err.message : 'לא ידועה'}). יש לך גיבוי אוטומטי בסקשן "גיבויים אחרונים".`);
+      })
+    );
+  }
   return true;
 }
 function saveBankTransactions(){
   // merge-safe: union with whatever's already on the server by transaction signature, so a
   // stale local tab can't wipe out transactions another tab already imported/approved
-  storageGet(BANK_TRANSACTIONS_KEY).then(serverArr=>{
-    const merged = Array.isArray(serverArr) ? [...serverArr] : [];
+  fetchAllBankTransactionsFromServer().then(server=>{
+    const merged = [...server];
     const existingKeys = new Set(merged.map(bankTxKey));
     bankTransactions.forEach(t=>{
       const k = bankTxKey(t);
@@ -1025,8 +1118,12 @@ function saveBankTransactions(){
   }).catch(()=> guardedWriteBankTransactions(bankTransactions, true));
 }
 function forceOverwriteBankTransactions(){
-  // used only by the explicit "delete all" action, which intentionally shrinks the list
-  storageSet(BANK_TRANSACTIONS_KEY, bankTransactions);
+  // used only by the explicit "delete all" action, which intentionally shrinks the list -
+  // clear the legacy doc and every shard
+  storageSet(BANK_TRANSACTIONS_KEY, []);
+  for(let i=0;i<BANK_TX_SHARD_COUNT;i++) storageSet(bankTxShardKey(i), []);
+  bankTxLegacy = [];
+  bankTxShards = new Array(BANK_TX_SHARD_COUNT).fill(null).map(()=>[]);
 }
 function saveLastImportInfo(){ storageSet(LAST_IMPORT_INFO_KEY, lastImportInfo); }
 function saveCardRegistry(){ storageSet(CARD_REGISTRY_KEY, cardRegistry); }
@@ -1094,8 +1191,7 @@ function deleteSingleBankTx(encodedKey){
   // specific transaction that was actually requested, through the guarded writer - using the
   // TRUE union size (server+local combined) as the "before" reference, not just this device's
   // possibly-stale local count
-  storageGet(BANK_TRANSACTIONS_KEY).then(serverArr=>{
-    const server = Array.isArray(serverArr) ? serverArr : [];
+  fetchAllBankTransactionsFromServer().then(server=>{
     const unionMap = new Map();
     [...server, ...bankTransactions].forEach(t=>{ unionMap.set(bankTxKey(t), t); });
     const beforeCount = unionMap.size;
@@ -1111,6 +1207,7 @@ function deleteSingleBankTx(encodedKey){
 }
 function clearAllBankTransactions(){
   if(!confirm(`למחוק את כל ${bankTransactions.length} התנועות הקיימות?\n\nהזיכרון נשאר: שמות עסקים, תיאורים, סימוני "קבוע/חד פעמי", "מכוסה מהכנסה נוספת" ותנועות "בבירור" - כל זה יחול אוטומטית שוב על תנועות שתייבא מחדש עם אותו שם עסק.\n\nזה רק מנקה את רשימת התנועות עצמה, כדי שלא תהיה כפילות בייבוא הבא.\n\nחשוב: ודא שהאפליקציה לא פתוחה כרגע במכשיר/טאב נוסף, אחרת ייתכן שהיא "תחזיר" את התנועות מיד.`)) return;
+  backupBankTransactionsSnapshot(bankTransactions);
   bankTransactions = [];
   forceOverwriteBankTransactions();
   render();
@@ -2132,6 +2229,22 @@ function sourceLabel(source){
   if(source==='max') return '💳 מקס';
   return `💳 ${escHtml(source||'לא ידוע')}`;
 }
+function recomputeBankTransactionsFromShards(){
+  const all = [...bankTxLegacy, ...bankTxShards.flat()];
+  const map = new Map();
+  all.forEach(t=>{ if(t) map.set(bankTxKey(t), t); });
+  bankTransactions = Array.from(map.values()).sort((a,b)=> new Date(b.date) - new Date(a.date));
+}
+async function fetchAllBankTransactionsFromServer(){
+  const legacy = (await storageGet(BANK_TRANSACTIONS_KEY)) || [];
+  const shardPromises = [];
+  for(let i=0;i<BANK_TX_SHARD_COUNT;i++) shardPromises.push(storageGet(bankTxShardKey(i)));
+  const shards = await Promise.all(shardPromises);
+  const all = [...legacy, ...shards.flat().filter(Boolean)];
+  const map = new Map();
+  all.forEach(t=>{ if(t) map.set(bankTxKey(t), t); });
+  return Array.from(map.values());
+}
 function bankTxKey(t){
   return `${t.source}|${t.date}|${t.description}|${t.amount}`;
 }
@@ -2721,6 +2834,29 @@ function renderDebtsScreen(){
         </div>
       `;
       }).join('')}
+    </div>
+    ` : ''}
+
+    ${bankTxBackups.length>0 ? `
+    <div class="dsection">
+      <h3>🕐 גיבויים אחרונים</h3>
+      <span class="dcount">${bankTxBackups.length}</span>
+    </div>
+    <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+      גיבוי אוטומטי נשמר לפני כל שינוי ברשימת התנועות. שחזור ממזג עם מה שיש עכשיו - לא מוחק כלום.
+    </div>
+    <div class="listwrap" style="margin-top:0;">
+      ${bankTxBackups.map((b,i)=>`
+      <div class="task ok" style="margin-bottom:8px;">
+        <div class="taskmid" style="width:100%;">
+          <div class="taskttl">${new Date(b.timestamp).toLocaleString('he-IL',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</div>
+          <div class="tasktime">${b.count} תנועות באותו רגע</div>
+          <div class="dactions" style="margin-top:10px;">
+            <button class="fuelbtn" onclick="restoreBankTxBackup(${i})">↩️ שחזור לגיבוי הזה</button>
+          </div>
+        </div>
+      </div>
+      `).join('')}
     </div>
     ` : ''}
 
