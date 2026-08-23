@@ -3133,11 +3133,15 @@ function splitTransactionFromGroup(encodedKey){
   const oldDesc = tx.description;
   tx.description = label.trim();
   saveBankTransactions();
-  // clean up any stale price-change alert task tied to the old shared identity
-  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('bankpricechange-') && t.id.includes(encodeURIComponent(oldDesc).slice(0,20))));
+  // clean up any stale price-change / mixed-merchant alert tasks tied to the old shared identity
+  // (bug fix: these ids are built with the raw description, not URL-encoded - must match the same way)
+  tasks = tasks.filter(t => !(typeof t.id==='string' && (
+    (t.id.startsWith('bankpricechange-') && t.id.includes(oldDesc)) ||
+    t.id === `bankmixed-${oldDesc}`
+  )));
   saveTasks();
   render();
-  alert('הופרד בהצלחה. שים לב: אם תייבא בעתיד תנועה חדשה מאותו חיוב ספציפי, ייתכן שהיא תגיע עם השם המקורי המשותף שוב, ותצטרך לחזור על ההפרדה פעם נוספת עבורה.');
+  alert('הופרד בהצלחה, והתזכורת הישנה נמחקה. שים לב: אם תייבא בעתיד תנועה חדשה מאותו חיוב ספציפי, ייתכן שהיא תגיע עם השם המקורי המשותף שוב, ותצטרך לחזור על ההפרדה פעם נוספת עבורה.');
 }
 function openMerchantAliasSheet(encodedRawDesc, suggestedRemaining){
   const rawDesc = decodeURIComponent(encodedRawDesc);
