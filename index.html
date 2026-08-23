@@ -981,12 +981,17 @@ function saveBankTxTags(){
     storageSet(BANK_TX_TAGS_KEY, merged);
   }).catch(()=> storageSet(BANK_TX_TAGS_KEY, bankTxTags));
 }
-function guardedWriteBankTransactions(newArray, allowShrink){
+function guardedWriteBankTransactions(newArray, allowShrink, referenceCount){
   // circuit breaker: refuse any write that would drastically shrink the transaction list
   // unless explicitly flagged as intentional (the "delete all" button, or a single-item delete
   // that only drops a couple of items). This is a general safety net against any future bug
   // (in this code or anywhere else) that might otherwise silently wipe out real data.
-  const currentCount = bankTransactions.length;
+  //
+  // Important: the reference count MUST come from the true combined (server+local) count at
+  // the moment of the write, not just this device's local in-memory count - a tab that's been
+  // open a while and hasn't caught up yet would otherwise compare against its own stale, too-low
+  // number and never notice a real problem.
+  const currentCount = referenceCount!=null ? referenceCount : bankTransactions.length;
   const droppedTooMany = newArray.length < currentCount - 3 && newArray.length < currentCount * 0.7;
   if(droppedTooMany && !allowShrink){
     console.error('Blocked a suspicious bank transactions write: would drop from', currentCount, 'to', newArray.length);
@@ -1030,18 +1035,21 @@ function deleteSingleBankTx(encodedKey){
   const key = decodeURIComponent(encodedKey);
   // safety fix: NEVER trust a single source as "the truth" - union server + local first
   // (so a bad/empty/stale server read can never wipe anything), then remove only the one
-  // specific transaction that was actually requested, through the guarded writer
+  // specific transaction that was actually requested, through the guarded writer - using the
+  // TRUE union size (server+local combined) as the "before" reference, not just this device's
+  // possibly-stale local count
   storageGet(BANK_TRANSACTIONS_KEY).then(serverArr=>{
     const server = Array.isArray(serverArr) ? serverArr : [];
     const unionMap = new Map();
     [...server, ...bankTransactions].forEach(t=>{ unionMap.set(bankTxKey(t), t); });
+    const beforeCount = unionMap.size;
     unionMap.delete(key);
     const result = Array.from(unionMap.values());
-    guardedWriteBankTransactions(result, false);
+    guardedWriteBankTransactions(result, false, beforeCount);
     render();
   }).catch(()=>{
     const result = bankTransactions.filter(t=>bankTxKey(t)!==key);
-    guardedWriteBankTransactions(result, false);
+    guardedWriteBankTransactions(result, false, bankTransactions.length);
     render();
   });
 }
