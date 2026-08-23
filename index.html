@@ -512,6 +512,7 @@ const BANK_TX_APPROVALS_KEY = 'banktxapprovals_v1'; // maps a stable transaction
 const BANK_TX_FLAGS_KEY = 'banktxflags_v1'; // maps a stable transaction signature -> {status:'suspicious', flaggedAt} - stays until you resolve it
 const BANK_SYNC_STATUS_KEY = 'banksyncstatus_v1'; // written externally by the bank-sync Action - tells us if a source (Isracard/Max) failed on the last run
 const LAST_IMPORT_INFO_KEY = 'lastimportinfo_v1'; // {source, count, importedAt} for the most recent manual Excel/CSV import
+const CARD_REGISTRY_KEY = 'cardregistry_v1'; // [{id, name, last4}] - the cards/accounts you track, to avoid duplicate imports and see per-card status
 const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
 const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
 let entries = [];
@@ -535,6 +536,7 @@ let bankTxApprovals = {};
 let bankTxFlags = {};
 let bankSyncStatus = null;
 let lastImportInfo = null;
+let cardRegistry = [];
 let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
 let approvedTxShowCount = 20; // how many approved bank transactions to show before "show more"
 let debtEditTargetId = null;
@@ -884,6 +886,11 @@ async function attachFirestoreListeners(){
     lastImportInfo = (d && d.value) ? JSON.parse(d.value) : null;
     render();
   }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(CARD_REGISTRY_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    cardRegistry = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
   fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
     const d = doc.data();
     const arr = (d && d.value) ? JSON.parse(d.value) : [];
@@ -950,6 +957,7 @@ async function load(){
   bankTxFlags = (await storageGet(BANK_TX_FLAGS_KEY)) || {};
   bankSyncStatus = (await storageGet(BANK_SYNC_STATUS_KEY)) || null;
   lastImportInfo = (await storageGet(LAST_IMPORT_INFO_KEY)) || null;
+  cardRegistry = (await storageGet(CARD_REGISTRY_KEY)) || [];
   const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
   if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
   workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
@@ -1021,6 +1029,54 @@ function forceOverwriteBankTransactions(){
   storageSet(BANK_TRANSACTIONS_KEY, bankTransactions);
 }
 function saveLastImportInfo(){ storageSet(LAST_IMPORT_INFO_KEY, lastImportInfo); }
+function saveCardRegistry(){ storageSet(CARD_REGISTRY_KEY, cardRegistry); }
+let cardEditTargetId = null;
+function openCardSheet(id){
+  cardEditTargetId = id || null;
+  const c = id ? cardRegistry.find(x=>x.id===id) : null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>💳 ${c ? 'עריכת כרטיס' : 'הוספת כרטיס'}</h2>
+    <input id="cardNameInput" class="contactinput" style="width:100%; margin-bottom:14px;" type="text" placeholder="שם (למשל: ישראכרט, מקס, בנק הפועלים)" value="${c ? escHtml(c.name) : ''}">
+    <input id="cardLast4Input" class="contactinput" style="width:100%; margin-bottom:16px;" type="text" inputmode="numeric" placeholder="4 ספרות אחרונות (לא חובה)" value="${c && c.last4 ? escHtml(c.last4) : ''}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitCard()">💾 שמירה</button>
+    </div>
+    ${c ? `<div class="cancel" onclick="deleteCard('${c.id}')" style="color:var(--unpaid);">מחיקת הכרטיס מהרשימה</div>` : ''}
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitCard(){
+  const name = (document.getElementById('cardNameInput').value || '').trim();
+  const last4 = (document.getElementById('cardLast4Input').value || '').trim();
+  if(!name) return;
+  if(cardEditTargetId){
+    const c = cardRegistry.find(x=>x.id===cardEditTargetId);
+    if(c){ c.name = name; c.last4 = last4 || null; }
+  } else {
+    cardRegistry.push({ id:'card'+Date.now()+Math.random().toString(36).slice(2,7), name, last4: last4 || null });
+  }
+  saveCardRegistry();
+  cardEditTargetId = null;
+  closeSheet();
+  render();
+}
+function deleteCard(id){
+  if(!confirm('להסיר את הכרטיס הזה מהרשימה? התנועות שכבר יובאו לא יימחקו.')) return;
+  cardRegistry = cardRegistry.filter(x=>x.id!==id);
+  saveCardRegistry();
+  closeSheet();
+  render();
+}
+function latestTxForCard(card){
+  const matches = bankTransactions.filter(t=>{
+    if(card.last4 && t.account) return String(t.account).includes(card.last4);
+    return (t.source||'')===card.name;
+  });
+  if(matches.length===0) return null;
+  return matches.sort((a,b)=> new Date(b.date)-new Date(a.date))[0];
+}
 
 // ============ Manual Excel/CSV import (replaces the old GitHub-based auto sync) ============
 let importedRows = [];
@@ -1097,6 +1153,26 @@ function guessColumnIndex(keywords){
   }
   return -1;
 }
+function onImportCardSelectChange(){
+  const sel = document.getElementById('importCardSelect');
+  if(!sel) return;
+  if(sel.value === '__new__'){
+    const name = prompt('שם הכרטיס (למשל: ישראכרט, מקס):');
+    if(!name || !name.trim()){ sel.value=''; return; }
+    const last4 = prompt('4 ספרות אחרונות (אפשר להשאיר ריק):') || '';
+    const newCard = { id:'card'+Date.now()+Math.random().toString(36).slice(2,7), name:name.trim(), last4: last4.trim()||null };
+    cardRegistry.push(newCard);
+    saveCardRegistry();
+    const opt = document.createElement('option');
+    opt.value = newCard.id;
+    opt.textContent = newCard.name + (newCard.last4 ? ` (${newCard.last4})` : '');
+    sel.insertBefore(opt, sel.lastElementChild);
+    sel.value = newCard.id;
+  }
+  const card = cardRegistry.find(c=>c.id===sel.value);
+  const sourceInput = document.getElementById('importSourceLabel');
+  if(card && sourceInput){ sourceInput.value = card.name; }
+}
 function openImportMappingSheet(){
   document.getElementById('overlay').classList.add('open');
   const sheet = document.getElementById('sheet');
@@ -1109,11 +1185,18 @@ function openImportMappingSheet(){
   const cardGuess = guessColumnIndex(['כרטיס','card','ספרות']);
   const options = importedHeaders.map((h,i)=>`<option value="${i}">${escHtml(h||('עמודה '+(i+1)))}</option>`).join('');
   const optionsWithNone = `<option value="-1">— ללא —</option>` + options;
+  const cardSelectOptions = cardRegistry.map(c=>`<option value="${c.id}">${escHtml(c.name)}${c.last4?` (${escHtml(c.last4)})`:''}</option>`).join('');
   sheet.innerHTML = `
     <h2>📥 ייבוא תנועות</h2>
     <div style="font-size:11.5px; color:var(--muted); text-align:center; margin-bottom:16px; line-height:1.6;">
       נמצאו ${importedRows.length} שורות בקובץ. בדוק שהעמודות נכונות (ניחשנו לפי הכותרות בקובץ).
     </div>
+    <div class="fieldlabel">לאיזה כרטיס שייך הקובץ הזה?</div>
+    <select id="importCardSelect" class="contactinput" style="width:100%; margin-bottom:14px;" onchange="onImportCardSelectChange()">
+      <option value="">— אחר / הזן ידנית למטה —</option>
+      ${cardSelectOptions}
+      <option value="__new__">➕ כרטיס חדש...</option>
+    </select>
     <input id="importSourceLabel" class="contactinput" style="width:100%; margin-bottom:14px;" type="text" placeholder="מאיפה זה? (למשל: בנק הפועלים, ישראכרט...)">
     <div class="fieldlabel">עמודת תאריך</div>
     <select id="importDateCol" class="contactinput" style="width:100%; margin-bottom:12px;">${options}</select>
@@ -1174,6 +1257,8 @@ function submitBankImport(){
   const amountCol = parseInt(document.getElementById('importAmountCol').value,10);
   const installmentsCol = parseInt(document.getElementById('importInstallmentsCol').value,10);
   const cardCol = parseInt(document.getElementById('importCardCol').value,10);
+  const selectedCardId = document.getElementById('importCardSelect') ? document.getElementById('importCardSelect').value : '';
+  const selectedCard = cardRegistry.find(c=>c.id===selectedCardId);
   const now = new Date();
   const curYear = now.getFullYear(), curMonth = now.getMonth();
   let added = 0, skipped = 0, offMonthCount = 0;
@@ -1183,7 +1268,7 @@ function submitBankImport(){
     const amount = parseImportedAmount(row[amountCol]);
     if(!dateVal || !desc || amount==null){ skipped++; return; }
     const installments = installmentsCol>=0 ? parseImportedInstallments(row[installmentsCol]) : null;
-    const account = cardCol>=0 ? (String(row[cardCol]||'').trim() || null) : null;
+    const account = cardCol>=0 ? (String(row[cardCol]||'').trim() || null) : (selectedCard ? selectedCard.last4 : null);
     const txDate = new Date(dateVal);
     const offMonth = txDate.getFullYear()!==curYear || txDate.getMonth()!==curMonth;
     const newTx = { source: sourceLabelVal, account, date: dateVal, description: desc, amount, status: null, installments, offMonth };
@@ -2638,6 +2723,30 @@ function renderDebtsScreen(){
       }).join('')}
     </div>
     ` : ''}
+
+    <div class="dsection">
+      <h3>🗂️ הכרטיסים שלי</h3>
+      <span class="dcount">${cardRegistry.length}</span>
+    </div>
+    <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+      תגדיר את הכרטיסים/חשבונות שאתה עוקב אחריהם, כדי לראות לכל אחד מתי עודכן לאחרונה, ולבחור אותם מהר בכל ייבוא.
+    </div>
+    <div class="listwrap" style="margin-top:0;">
+      <div class="addcard" onclick="openCardSheet()"><span>➕</span> הוספת כרטיס</div>
+      ${cardRegistry.map(c=>{
+        const latest = latestTxForCard(c);
+        return `
+        <div class="task ok" style="margin-bottom:8px; cursor:pointer;" onclick="openCardSheet('${c.id}')">
+          <div class="taskmid" style="width:100%;">
+            <div class="taskttl">💳 ${escHtml(c.name)}${c.last4?` (${escHtml(c.last4)})`:''} <span style="opacity:.4; font-size:11px;">✏️</span></div>
+            <div class="tasktime">${latest
+                ? `עודכן לאחרונה: <span style="color:var(--text);">${new Date(latest.date).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit',year:'numeric'})}</span> · ${escHtml(merchantAliases[latest.description]||latest.description)} · ${fmt(Math.abs(Number(latest.amount)||0))}`
+                : `<span style="color:var(--unpaid);">עדיין לא יובאו תנועות לכרטיס הזה</span>`}</div>
+          </div>
+        </div>
+      `;
+      }).join('')}
+    </div>
 
     <div class="dsection">
       <h3>📥 ייבוא תנועות מאקסל/CSV</h3>
