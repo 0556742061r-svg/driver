@@ -1735,6 +1735,16 @@ function totalDebtRemaining(){
 function totalDebtPaidAllTime(){
   return debtPayments.reduce((s,p)=>s+p.amount, 0);
 }
+function createdAfterDueDayPassedThisMonth(item){
+  // if you're adding a debt/recurring charge with a due-day that's already passed this month
+  // (e.g. you're re-entering everything on the 23rd with a due-day of 15), don't immediately
+  // flag it as overdue - start tracking from the next cycle instead
+  if(!item.createdTs || !item.dueDay) return false;
+  const created = new Date(item.createdTs);
+  const now = new Date();
+  if(created.getFullYear()!==now.getFullYear() || created.getMonth()!==now.getMonth()) return false;
+  return created.getDate() > item.dueDay;
+}
 function debtPaidThisMonthAmount(debtId){
   const now = new Date();
   return debtPayments.filter(p=>{
@@ -1742,6 +1752,19 @@ function debtPaidThisMonthAmount(debtId){
     const pd = new Date(p.ts);
     return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
   }).reduce((s,p)=>s+p.amount, 0);
+}
+function debtMonthMarkedPaid(d){
+  const ym = currentYm();
+  return !!(d.paidMonths && d.paidMonths[ym]);
+}
+function markDebtMonthPaidNoBalanceChange(id){
+  const d = debts.find(x=>x.id===id);
+  if(!d) return;
+  const ym = currentYm();
+  if(!d.paidMonths) d.paidMonths = {};
+  d.paidMonths[ym] = !d.paidMonths[ym]; // toggle - lets you undo by mistake too
+  saveDebts();
+  render();
 }
 function totalRecurringMonthly(){
   return recurringCharges.filter(r=>r.installmentsLeft!==0 && !r.coveredByExtraIncome).reduce((s,r)=>s+r.amount, 0);
@@ -2122,8 +2145,8 @@ function renderDebtsScreen(){
           const pct = d.totalOwed>0 ? Math.min(100, Math.round((paid/d.totalOwed)*100)) : 0;
           const isDone = remaining<=0;
           const paidThisMonthForD = debtPaidThisMonthAmount(d.id);
-          const isOverdue = !isDone && d.dueDay && todayDate > d.dueDay && paidThisMonthForD < (d.monthlyAgreed||0);
-          const isPaidThisMonth = !isDone && d.dueDay && d.monthlyAgreed && paidThisMonthForD >= d.monthlyAgreed;
+          const isOverdue = !isDone && d.dueDay && todayDate > d.dueDay && paidThisMonthForD < (d.monthlyAgreed||0) && !createdAfterDueDayPassedThisMonth(d);
+          const isPaidThisMonth = !isDone && d.dueDay && d.monthlyAgreed && (paidThisMonthForD >= d.monthlyAgreed || debtMonthMarkedPaid(d));
           const initial = (d.creditorName||'?').trim().charAt(0).toUpperCase();
           return `
           <div class="dcard ${isOverdue?'dueflag':''} ${isDone?'done':''}">
@@ -2150,6 +2173,7 @@ function renderDebtsScreen(){
             ${d.note ? `<div class="dnote"><span class="ic">📝</span><span>${escHtml(d.note)}</span></div>` : ''}
             <div class="dactions">
               ${!isDone ? `<button class="fuelbtn" onclick="openPaymentSheet('${d.id}')">💰 רישום תשלום</button>` : ''}
+              ${(!isDone && d.dueDay && d.monthlyAgreed) ? `<button class="fuelbtn" onclick="markDebtMonthPaidNoBalanceChange('${d.id}')" title="מסמן שהחודש טופל בלי לשנות את היתרה - שימושי אם כבר הזנת יתרה עדכנית">${isPaidThisMonth ? '↩️ ביטול הסימון' : '✔️ שולם - בלי לשנות סכום'}</button>` : ''}
               <button class="fuelbtn" onclick="openDebtSheet('${d.id}')">✏️ עריכה</button>
               <button class="fuelbtn" onclick="deleteDebt('${d.id}')">🗑️</button>
             </div>
@@ -2169,7 +2193,7 @@ function renderDebtsScreen(){
     <div class="listwrap" style="margin-top:0;">
       <div class="addcard" onclick="openRecurringSheet()"><span>➕</span> הוספת חיוב קבוע</div>
       ${sortedRecurring.length===0 ? '' : sortedRecurring.map(r=>{
-        const isPastDue = r.dueDay && todayDate > r.dueDay;
+        const isPastDue = r.dueDay && todayDate > r.dueDay && !createdAfterDueDayPassedThisMonth(r);
         const isFinished = r.installmentsLeft === 0;
         return `
         <div class="dcard ${isFinished?'done':''}">
