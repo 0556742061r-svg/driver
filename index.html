@@ -2477,9 +2477,17 @@ function deleteRecurring(id){
   render();
 }
 function checkMonthlyRecurringReminders(){
-  // recurring fixed charges never generate reminder tasks - they exist purely to feed the daily
-  // target calculation. Just clean up any old reminder tasks from earlier versions of the app.
-  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('recdue-')));
+  // retire old-format reminders that don't roll forward correctly, same fix as debts had
+  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('recdue-') && !t.id.endsWith('-dayv3')));
+  recurringCharges.forEach(r=>{
+    if(!r.dueDay || r.installmentsLeft===0) return;
+    const dueDate = nextDueDateFor(r.dueDay);
+    const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+    const onDayId = `recdue-${r.id}-${ym}-dayv3`;
+    if(!tasks.find(t=>t.id===onDayId)){
+      tasks.push({ id:onDayId, title:`📌 ${r.isAutomatic ? 'צפוי לרדת אוטומטית: ' : 'תשלום: '}${r.name} · ${fmt(r.amount)} · יום ${r.dueDay} לחודש`, deadline:dueDate.getTime(), done:false });
+    }
+  });
   saveTasks();
 }
 function openPaymentSheet(debtId){
