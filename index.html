@@ -1489,6 +1489,22 @@ function checkTaskAlerts(){
   const now = Date.now();
   tasks.filter(t=>!t.done).forEach(t=>{
     const minsLeft = Math.round((t.deadline - now) / 60000);
+    const daysLeft = Math.floor((t.deadline - now) / 86400000);
+    const day3Key = t.id+'-day3', day1Key = t.id+'-day1';
+    if(daysLeft === 3 && !notifiedTaskAlerts.has(day3Key)){
+      notifiedTaskAlerts.add(day3Key);
+      try{
+        new Notification('📅 עוד 3 ימים', { body: t.title });
+        if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      }catch(e){}
+    }
+    if(daysLeft === 1 && !notifiedTaskAlerts.has(day1Key)){
+      notifiedTaskAlerts.add(day1Key);
+      try{
+        new Notification('📅 מחר', { body: t.title });
+        if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      }catch(e){}
+    }
     const hourKey = t.id+'-hour', soonKey = t.id+'-soon', overKey = t.id+'-over';
     if(minsLeft <= 60 && minsLeft > 10 && !notifiedTaskAlerts.has(hourKey)){
       notifiedTaskAlerts.add(hourKey);
