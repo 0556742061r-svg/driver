@@ -1,0 +1,2906 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>מונה - יומן נסיעות</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="המונה שלי">
+<meta name="theme-color" content="#14161A">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2314161A'/%3E%3Ctext x='50' y='66' font-size='52' text-anchor='middle' fill='%23F4B400' font-family='Arial'%3E%E2%82%AA%3C/text%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='22' fill='%2314161A'/%3E%3Ctext x='50' y='66' font-size='52' text-anchor='middle' fill='%23F4B400' font-family='Arial'%3E%E2%82%AA%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=Roboto+Mono:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.9.2/confetti.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<style>
+  :root{
+    --bg:#14161A;
+    --surface:#1F2226;
+    --surface2:#292D33;
+    --text:#F2F1ED;
+    --muted:#8B9099;
+    --accent:#F4B400;
+    --accent-dim:#4a3d10;
+    --paid:#3FB27F;
+    --paid-dim:#1c3327;
+    --unpaid:#E85D4A;
+    --unpaid-dim:#3a211c;
+    --divider:#31353b;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; background:var(--bg); color:var(--text); font-family:'Heebo',sans-serif; overscroll-behavior-y:none; line-height:1.55;}
+  .mono{font-family:'Roboto Mono',monospace;}
+  #app{max-width:480px; margin:0 auto; min-height:100vh; padding-bottom:100px; position:relative;}
+
+  header{padding:22px 20px 8px; display:flex; align-items:baseline; justify-content:space-between;}
+  header h1{font-size:19px; font-weight:900; margin:0; letter-spacing:.5px;}
+  header .date{font-size:12px; color:var(--muted); font-family:'Roboto Mono',monospace;}
+
+  .meter{
+    margin:10px 18px 6px; background:linear-gradient(180deg,var(--surface2),var(--surface));
+    border-radius:18px; padding:20px 22px; position:relative; overflow:hidden;
+    border:1px solid #35393f; box-shadow: inset 0 1px 0 rgba(255,255,255,.03), 0 10px 24px -12px rgba(0,0,0,.6);
+  }
+  .meter::before{content:"";position:absolute; inset:0; background:
+    repeating-linear-gradient(90deg, rgba(244,180,0,.04) 0 2px, transparent 2px 14px);
+    pointer-events:none;}
+  .meter .label{font-size:11px; color:var(--muted); letter-spacing:1.5px; text-transform:uppercase; font-weight:500;}
+  .meter .amount{font-size:44px; font-weight:700; margin-top:4px; color:var(--accent); letter-spacing:1px; direction:ltr; text-align:right;}
+  .meter .amount span{font-size:22px; opacity:.7; margin-right:4px;}
+  .meter .sub{margin-top:10px; display:flex; gap:14px; font-size:12px; color:var(--muted);}
+
+  .goalcard{
+    margin:10px 18px 0; padding:16px 18px; background:var(--surface); border-radius:16px;
+    border:1px solid #2f333a;
+  }
+  .goalcard.nogoal{text-align:center; padding:14px 18px; color:var(--muted); font-size:13px; cursor:pointer;}
+  .goalcard.nogoal:active{background:var(--surface2);}
+  .goalhead{display:flex; align-items:baseline; justify-content:space-between; margin-bottom:10px;}
+  .goallabel{font-size:11.5px; color:var(--muted); letter-spacing:.5px;}
+  .goalnums{font-family:'Roboto Mono',monospace; font-size:13px; color:var(--text); cursor:pointer;}
+  .goalnums b{color:var(--accent); font-weight:700;}
+  .goalbar{
+    width:100%; height:14px; border-radius:10px; background:var(--surface2); overflow:hidden; position:relative;
+  }
+  .goalbarfill{
+    height:100%; border-radius:10px; background:linear-gradient(90deg, #d99a00, var(--accent));
+    transition:width .5s ease; min-width:0;
+  }
+  .goalbarfill.done{background:linear-gradient(90deg, var(--paid), #6fe3ab);}
+  .goalmsg{margin-top:10px; font-size:12.5px; color:var(--muted); text-align:center;}
+  .goalmsg.done{color:var(--paid); font-weight:600;}
+  .goalinput{
+    width:100%; padding:14px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--accent); font-family:'Roboto Mono',monospace; font-size:22px; font-weight:700; text-align:center;
+    direction:ltr; margin-bottom:14px;
+  }
+  .meter .sub b{color:var(--text); font-family:'Roboto Mono',monospace;}
+
+  .workdaybar{
+    margin:10px 18px 0; padding:10px 14px; border-radius:12px; background:var(--surface);
+    border:1px solid #2f333a; display:flex; align-items:center; justify-content:space-between;
+    font-size:11.5px; color:var(--muted); flex-wrap:wrap; gap:8px;
+  }
+  .workdaybar.viewing{background:#26241a; border-color:#5a5026; color:#e8d894;}
+  .wdbtn{
+    border:none; background:var(--surface2); color:var(--text); font-size:11px; font-weight:600;
+    padding:7px 10px; border-radius:9px; cursor:pointer; font-family:'Heebo',sans-serif;
+  }
+  .wdbtn.end{background:var(--unpaid-dim); color:var(--unpaid);}
+  .wdbtn:active{opacity:.8;}
+  .outstanding{
+    margin:10px 18px; padding:13px 16px; border-radius:14px; background:var(--unpaid-dim);
+    border:1px solid #5a2f26; display:flex; align-items:center; justify-content:space-between;
+    font-size:13px; color:#f0b3a6;
+  }
+  .outstanding b{font-family:'Roboto Mono',monospace; font-size:17px; color:var(--unpaid); font-weight:700;}
+  .outstanding.hidden{display:none;}
+
+  .actions{display:flex; gap:8px; margin:16px 18px 8px; flex-wrap:wrap;}
+  .actbtn{
+    flex:1; min-width:96px; border:none; border-radius:16px; padding:16px 6px; font-family:'Heebo',sans-serif;
+    font-weight:700; font-size:13.5px; color:var(--bg); cursor:pointer; display:flex; flex-direction:column;
+    align-items:center; gap:5px; transition:transform .08s ease;
+  }
+  .actbtn:active{transform:scale(.96);}
+  .actbtn .ic{font-size:22px;}
+  .actbtn.passenger{background:var(--accent);}
+  .actbtn.delivery{background:#e6e6e6;}
+  .actbtn.install{background:#4FD1C5;}
+  .expenserow{display:flex; gap:10px; margin:0 18px;}
+  .fuelbtn{
+    flex:1; padding:12px; border-radius:14px; border:1px dashed #45494f;
+    background:transparent; color:var(--muted); font-family:'Heebo',sans-serif; font-weight:500;
+    font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .fuelbtn:active{background:var(--surface);}
+
+  .tabs{display:flex; gap:6px; margin:22px 18px 10px; background:var(--surface); padding:4px; border-radius:12px;}
+  .tab{flex:1; text-align:center; padding:9px 4px; border-radius:9px; font-size:12.5px; font-weight:500; color:var(--muted); cursor:pointer;}
+  .tab.active{background:var(--surface2); color:var(--text); font-weight:700;}
+
+  .listwrap{margin:4px 18px 0;}
+  .resetlink{
+    text-align:center; margin:22px 18px 4px; font-size:12px; color:var(--muted); padding:10px;
+    cursor:pointer; opacity:.7;
+  }
+  .resetlink:active{opacity:1; color:var(--unpaid);}
+
+  .fab{
+    position:fixed; bottom:26px; left:20px; width:60px; height:60px; border-radius:50%;
+    background:var(--unpaid); color:#fff; font-size:25px; border:none; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; box-shadow:0 10px 24px -8px rgba(0,0,0,.7); z-index:40;
+    touch-action:none; user-select:none; -webkit-touch-callout:none; -webkit-user-select:none;
+  }
+  .fab:active{transform:scale(.94);}
+  .fab.recording{animation:fabpulse 1s infinite;}
+  @keyframes fabpulse{
+    0%{ box-shadow:0 0 0 0 rgba(232,93,74,.65); }
+    70%{ box-shadow:0 0 0 20px rgba(232,93,74,0); }
+    100%{ box-shadow:0 0 0 0 rgba(232,93,74,0); }
+  }
+  .rectoast{
+    position:fixed; bottom:98px; left:14px; background:var(--surface2); color:var(--unpaid);
+    font-family:'Roboto Mono',monospace; font-weight:700; font-size:13px; padding:8px 16px;
+    border-radius:20px; display:none; align-items:center; z-index:41;
+    box-shadow:0 6px 16px -4px rgba(0,0,0,.6); border:1px solid #5a2f26;
+  }
+
+  .voicewrap{margin:14px 18px 0;}
+  .voiceheader{font-size:12px; color:var(--muted); margin-bottom:8px; font-weight:600;}
+  .voicenote{
+    display:flex; align-items:center; gap:8px; padding:10px 12px; background:var(--surface); border-radius:14px;
+    margin-bottom:8px; border:1px solid #2f333a;
+  }
+  .voicenote audio{filter:invert(.88) hue-rotate(180deg);}
+  .voicemeta{text-align:center; min-width:56px; flex-shrink:0;}
+  .voicetag{font-size:10.5px; color:var(--text); font-weight:600; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .voicetime{font-size:10px; color:var(--muted); font-family:'Roboto Mono',monospace;}
+
+  .recbtn{
+    width:96px; height:96px; border-radius:50%; border:none; background:var(--unpaid); color:#fff; font-size:36px;
+    cursor:pointer; box-shadow:0 0 0 8px var(--unpaid-dim);
+  }
+  .recbtn.stop{background:var(--surface2); color:var(--unpaid); box-shadow:0 0 0 8px var(--surface2);}
+  .rectimer{font-size:32px; color:var(--unpaid); margin-bottom:22px; font-weight:700;}
+  .empty{text-align:center; padding:50px 20px; color:var(--muted); font-size:13px; line-height:1.8;}
+  .empty .ic{font-size:34px; display:block; margin-bottom:10px;}
+
+  .entry{
+    display:flex; align-items:flex-start; gap:12px; padding:13px 14px; background:var(--surface);
+    border-radius:14px; margin-bottom:8px; border:1px solid #292d33;
+  }
+  .entry .ic{
+    width:38px; height:38px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+    font-size:17px; flex-shrink:0; background:var(--surface2);
+  }
+  .entry .mid{flex:1; min-width:0;}
+  .entry .ttl{font-size:13.5px; font-weight:500;}
+  .entry .meta{
+    font-size:11px; color:var(--muted); margin-top:3px; font-family:'Roboto Mono',monospace;
+    display:flex; align-items:center; flex-wrap:wrap; row-gap:2px;
+  }
+  .entry .meta a{color:var(--accent); text-decoration:none; direction:ltr; unicode-bidi:isolate;}
+  .contactline{
+    margin-top:7px; padding-top:6px; border-top:1px solid #292d33; display:flex; align-items:center;
+    flex-wrap:wrap; gap:10px; font-size:11px; color:var(--muted); font-family:'Roboto Mono',monospace;
+  }
+  .contactline a{color:var(--accent); text-decoration:none; direction:ltr; unicode-bidi:isolate;}
+  .entry .amt{
+    font-family:'Roboto Mono',monospace; font-weight:700; font-size:15px; direction:ltr;
+    width:68px; text-align:right; flex-shrink:0; padding-top:1px; white-space:nowrap;
+  }
+  .entry .amt{cursor:pointer;}
+  .entry .amt:active{color:var(--accent) !important;}
+  .entry .del{color:var(--muted); font-size:15px; padding:2px; cursor:pointer;}
+  .rowactions{display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; flex-shrink:0; padding-top:1px; width:22px;}
+  .badge{
+    font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap;
+    border:none; font-family:'Heebo',sans-serif; min-width:64px; text-align:center; flex-shrink:0;
+  }
+  .badge.paid{background:var(--paid-dim); color:var(--paid);}
+  .badge.unpaid{background:var(--unpaid-dim); color:var(--unpaid);}
+
+  /* Modal */
+  .overlay{position:fixed; inset:0; background:rgba(10,11,13,.7); backdrop-filter:blur(2px); display:none; align-items:flex-end; z-index:50;}
+  .overlay.open{display:flex;}
+  .sheet{
+    width:100%; max-width:480px; margin:0 auto; background:var(--surface); border-radius:24px 24px 0 0;
+    padding:22px 20px 28px; animation:slideup .22s ease;
+  }
+  @keyframes slideup{from{transform:translateY(100%)} to{transform:translateY(0)}}
+  .sheet h2{margin:0 0 16px; font-size:15px; font-weight:700; display:flex; align-items:center; gap:8px;}
+  .display{
+    background:var(--bg); border-radius:14px; padding:18px; text-align:center; margin-bottom:14px;
+    border:1px solid #2b2f35;
+  }
+  .display .val{font-family:'Roboto Mono',monospace; font-size:38px; font-weight:700; color:var(--accent); direction:ltr;}
+  .commlabel{font-size:12px; color:var(--muted); margin-bottom:8px;}
+  .commquick{display:flex; gap:8px; margin-bottom:16px;}
+  .qchip{
+    flex:1; padding:11px 4px; border-radius:12px; background:var(--surface2); text-align:center; font-size:12.5px;
+    color:var(--muted); cursor:pointer; border:1px solid transparent; font-weight:500;
+  }
+  .qchip.on{border-color:var(--accent); color:var(--accent); background:var(--accent-dim); font-weight:700;}
+  .comminput{
+    flex:1; min-width:0; padding:11px 6px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Roboto Mono',monospace; font-size:13px; text-align:center;
+  }
+  .comminput::placeholder{color:var(--muted);}
+  .keypad{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:16px;}
+  .key{
+    padding:16px 0; border-radius:12px; background:var(--surface2); border:none; color:var(--text);
+    font-size:19px; font-weight:500; font-family:'Roboto Mono',monospace; cursor:pointer;
+  }
+  .key:active{background:#363b42;}
+  .key.fn{color:var(--muted); font-size:15px;}
+  .saverow{display:flex; gap:8px;}
+  .savebtn{
+    flex:1; padding:15px 4px; border:none; border-radius:14px; font-weight:700; font-size:12.5px; cursor:pointer;
+    color:#0c0d0f; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; text-align:center;
+  }
+  .savebtn.paid{background:var(--paid);}
+  .savebtn.unpaid{background:var(--unpaid); color:#1c0d09;}
+  .savebtn.cancelbtn{background:var(--surface2); color:var(--muted); border:1px solid #45494f;}
+  .savebtn.single{background:var(--accent); flex:1;}
+  .alertbar{
+    margin:10px 18px; padding:13px 16px; border-radius:14px; display:flex; align-items:center; justify-content:space-between;
+    font-size:13px;
+  }
+  .alertbar.hidden{display:none;}
+  .alertbar.charge{background:#2f2a18; border:1px solid #5a4d26; color:#e8cf94;}
+  .alertbar.charge b{font-family:'Roboto Mono',monospace; font-size:16px; color:var(--accent); font-weight:700;}
+  .chargebadge{font-size:10px; font-weight:700; padding:4px 9px; border-radius:20px; cursor:pointer; white-space:nowrap; border:none; font-family:'Heebo',sans-serif; min-width:64px; text-align:center; flex-shrink:0;}
+  .chargebadge.pending{background:var(--surface2); color:var(--muted);}
+  .chargebadge.charged{background:var(--unpaid-dim); color:var(--unpaid);}
+  .chargebadge.cleared{background:var(--paid-dim); color:var(--paid);}
+  .cancelledtag{font-size:10px; font-weight:600; color:var(--muted); padding:4px 9px; border-radius:20px; background:var(--surface2); min-width:64px; text-align:center; flex-shrink:0; display:inline-flex; align-items:center; justify-content:center;}
+
+  .taskswrap{margin:14px 18px 0;}
+  .task{
+    display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:14px; margin-bottom:8px;
+    border:1px solid #35393f;
+  }
+  .task.ok{background:var(--surface);}
+  .task.soon{background:#332a14; border-color:#6b551f;}
+  .task.overdue{background:var(--unpaid-dim); border-color:#7a3a2c;}
+  .taskmid{flex:1; min-width:0;}
+  .taskttl{font-size:13.5px; font-weight:600;}
+  .tasktime{font-size:11px; color:var(--muted); margin-top:2px; font-family:'Roboto Mono',monospace;}
+  .task.soon .tasktime{color:#e8cf94;}
+  .task.overdue .tasktime{color:var(--unpaid); font-weight:700;}
+  .taskdone{
+    width:34px; height:34px; border-radius:10px; border:none; background:var(--paid); color:#0c0d0f;
+    font-weight:700; font-size:15px; cursor:pointer; flex-shrink:0;
+  }
+  .taskdel{color:var(--muted); font-size:15px; padding:4px 6px; cursor:pointer;}
+  .taskbtn{
+    width:calc(100% - 36px); margin:12px 18px 0; padding:12px; border-radius:14px; border:1px dashed var(--accent);
+    background:transparent; color:var(--accent); font-family:'Heebo',sans-serif; font-weight:600;
+    font-size:13px; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .taskbtn:active{background:var(--accent-dim);}
+  .taskinput{
+    width:100%; padding:14px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Heebo',sans-serif; font-size:14px; margin-bottom:10px; direction:rtl;
+  }
+  .taskinput[type=time]{direction:ltr; text-align:center; font-family:'Roboto Mono',monospace;}
+
+  .contacttoggle{
+    text-align:center; padding:10px; margin-bottom:12px; border-radius:12px; border:1px dashed #45494f;
+    color:var(--muted); font-size:12.5px; cursor:pointer; font-weight:500;
+  }
+  .contactfields{display:flex; gap:8px; margin-bottom:14px;}
+  .contactinput{
+    flex:1; padding:12px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Heebo',sans-serif; font-size:13px; direction:rtl;
+  }
+  .contactinput[type=tel]{direction:ltr; text-align:center; font-family:'Roboto Mono',monospace;}
+  .entrycontact{display:flex; align-items:center; gap:10px; margin-top:4px; font-size:11.5px; color:var(--muted);}
+  .deadlinerow{display:flex; gap:10px; margin-bottom:6px; align-items:stretch;}
+  .timepicker{
+    flex:1; padding:16px 14px; border-radius:14px; background:var(--surface2); border:1.5px solid var(--accent);
+    color:var(--accent); font-family:'Roboto Mono',monospace; font-size:24px; font-weight:700; direction:ltr;
+    text-align:center; letter-spacing:1px;
+  }
+  .timepicker::-webkit-calendar-picker-indicator{filter:invert(.8) sepia(1) saturate(4) hue-rotate(5deg); opacity:.85; transform:scale(1.3); cursor:pointer;}
+  .timeresetbtn{
+    flex:0 0 56px; border-radius:14px; background:var(--surface2); border:1px solid #3a3e44; color:var(--muted);
+    font-size:20px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  .timeresetbtn:active{background:#363b42; color:var(--text);}
+  .entrycontact .cname{color:var(--text); font-weight:500;}
+  .editdebtor{color:var(--muted); cursor:pointer; padding:2px;}
+  .editdebtor:active{color:var(--accent);}
+  .cancel{
+    width:100%; text-align:center; margin-top:14px; color:var(--muted); font-size:15px; font-weight:600;
+    padding:14px; cursor:pointer; border-radius:12px; background:var(--surface2);
+  }
+  .cancel:active{background:#363b42; color:var(--text);}
+
+  .loginwrap{min-height:100vh; display:flex; flex-direction:column; justify-content:center; padding:24px;}
+  .loginlogo{text-align:center; margin-bottom:34px;}
+  .loginlogo .em{font-size:44px;}
+  .loginlogo h1{font-size:22px; font-weight:900; margin:10px 0 4px;}
+  .loginlogo p{font-size:13px; color:var(--muted); margin:0;}
+  .logincard{background:var(--surface); border:1px solid #2f333a; border-radius:20px; padding:22px;}
+  .googlebtn{
+    width:100%; padding:15px; border-radius:14px; background:#fff; color:#1f1f1f; border:none;
+    font-family:'Heebo',sans-serif; font-weight:700; font-size:14px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:10px; margin-bottom:18px;
+  }
+  .googlebtn:active{background:#eee;}
+  .divider{display:flex; align-items:center; gap:10px; margin:4px 0 18px; color:var(--muted); font-size:12px;}
+  .divider::before, .divider::after{content:""; flex:1; height:1px; background:#31353b;}
+  .authinput{
+    width:100%; padding:14px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Heebo',sans-serif; font-size:14px; margin-bottom:10px; direction:ltr;
+    text-align:right;
+  }
+  .authsubmit{
+    width:100%; padding:15px; border-radius:14px; background:var(--accent); color:var(--bg); border:none;
+    font-family:'Heebo',sans-serif; font-weight:700; font-size:14px; cursor:pointer; margin-top:4px;
+  }
+  .authsubmit:active{opacity:.9;}
+  .authtoggle{text-align:center; margin-top:16px; font-size:13px; color:var(--muted);}
+  .authtoggle b{color:var(--accent); cursor:pointer; font-weight:700;}
+  .autherr{
+    background:var(--unpaid-dim); border:1px solid #5a2f26; color:#f0b3a6; border-radius:12px;
+    padding:10px 14px; font-size:12.5px; margin-bottom:14px; display:none;
+  }
+  .authloading{text-align:center; padding:60px 20px; color:var(--muted); font-size:14px;}
+  .logoutlink{
+    text-align:center; margin:10px 18px 0; font-size:12px; color:var(--muted); padding:10px; cursor:pointer; opacity:.7;
+  }
+  .logoutlink:active{opacity:1;}
+  .useremail{text-align:center; font-size:11px; color:var(--muted); margin-top:2px;}
+
+  /* ---- Bank connection wizard screen ---- */
+  .bsw-hero{padding:14px 4px 6px; text-align:center; position:relative;}
+  .bsw-eyebrow{font-size:11px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:8px;}
+  .bsw-hero h1{font-size:20px; font-weight:900; margin:0 0 6px; line-height:1.35;}
+  .bsw-hero p{font-size:12.5px; color:var(--muted); line-height:1.7; max-width:420px; margin:0 auto;}
+  .bsw-timepill{display:inline-flex; align-items:center; gap:6px; margin-top:12px; background:var(--surface2); border:1px solid var(--divider); padding:6px 14px; border-radius:20px; font-size:12px; color:var(--text);}
+
+  .bsw-gaugewrap{display:flex; justify-content:center; margin:20px 0 6px; position:relative;}
+  .bsw-gauge{width:190px; height:190px; position:relative;}
+  .bsw-gauge svg{width:100%; height:100%; transform:rotate(-90deg);}
+  .bsw-gauge .bsw-track{fill:none; stroke:var(--surface2); stroke-width:13;}
+  .bsw-gauge .bsw-fill{fill:none; stroke:var(--accent); stroke-width:13; stroke-linecap:round; transition:stroke-dashoffset .6s cubic-bezier(.4,0,.2,1); filter:drop-shadow(0 0 6px rgba(244,180,0,.5));}
+  .bsw-gaugecenter{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;}
+  .bsw-gaugecenter .bsw-num{font-family:'Roboto Mono',monospace; font-size:34px; font-weight:700; color:var(--accent); line-height:1;}
+  .bsw-gaugecenter .bsw-num span{font-size:16px; color:var(--muted); font-weight:400;}
+  .bsw-gaugecenter .bsw-lbl{font-size:11px; color:var(--muted); margin-top:6px; letter-spacing:1px;}
+  .bsw-gaugecenter .bsw-done{font-size:13px; color:var(--paid); font-weight:700; margin-top:4px;}
+
+  .bsw-userbox{margin:22px 18px 8px; background:linear-gradient(180deg,var(--surface2),var(--surface)); border-radius:18px; padding:16px 18px; border:1px solid var(--divider);}
+  .bsw-userbox label{display:block; font-size:12.5px; color:var(--muted); margin-bottom:8px;}
+  .bsw-userbox input{width:100%; padding:12px 14px; border-radius:12px; background:var(--surface); border:1px solid var(--divider); color:var(--text); font-family:'Roboto Mono',monospace; font-size:14px; direction:ltr; text-align:right;}
+  .bsw-userbox input:focus{outline:none; border-color:var(--accent);}
+  .bsw-userbox .bsw-hint{font-size:11px; color:var(--muted); margin-top:8px; line-height:1.6;}
+
+  .bsw-sectiontitle{margin:30px 18px 12px; display:flex; align-items:center; gap:10px;}
+  .bsw-sectiontitle .bsw-badge{width:26px; height:26px; border-radius:8px; background:var(--surface2); color:var(--accent); display:flex; align-items:center; justify-content:center; font-family:'Roboto Mono',monospace; font-size:12px; font-weight:700; flex-shrink:0;}
+  .bsw-sectiontitle h2{font-size:14px; font-weight:700; margin:0;}
+  .bsw-sectiontitle .bsw-sub{font-size:11px; color:var(--muted); margin-right:auto;}
+
+  .bsw-stepcard{margin:0 18px 10px; background:var(--surface); border-radius:16px; padding:16px 18px; border:1px solid var(--divider); transition:border-color .3s, background .3s;}
+  .bsw-stepcard.checked{border-color:var(--paid); background:linear-gradient(180deg, var(--paid-dim) 0%, var(--surface) 40%);}
+  .bsw-checkbtn{width:26px; height:26px; border-radius:8px; border:2px solid var(--divider); background:transparent; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; color:transparent; font-size:15px; transition:all .2s; margin-top:1px;}
+  .bsw-checkbtn.on{background:var(--paid); border-color:var(--paid); color:#0d1a14;}
+  .bsw-top{display:flex; align-items:flex-start; gap:12px;}
+  .bsw-body{flex:1; min-width:0;}
+  .bsw-body h3{font-size:14px; font-weight:700; margin:0 0 4px;}
+  .bsw-body p{font-size:12px; color:var(--muted); line-height:1.6; margin:0 0 10px;}
+  .bsw-links{display:flex; flex-wrap:wrap; gap:8px; margin-top:2px;}
+  .bsw-btnlink, .bsw-btncopy{display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:600; padding:9px 14px; border-radius:10px; text-decoration:none; cursor:pointer; border:none; font-family:'Heebo',sans-serif;}
+  .bsw-btnlink{background:var(--accent-dim); color:var(--accent);}
+  .bsw-btnlink.primary{background:var(--accent); color:#241b00;}
+  .bsw-btncopy{background:var(--surface2); color:var(--text); border:1px solid var(--divider);}
+  .bsw-btncopy.copied{background:var(--paid-dim); color:var(--paid); border-color:var(--paid);}
+  .bsw-codebox{margin-top:10px; background:#0e0f12; border-radius:10px; padding:12px 14px; overflow-x:auto; font-family:'Roboto Mono',monospace; font-size:10.5px; color:#c9cdd3; direction:ltr; text-align:left; max-height:120px; overflow-y:auto; border:1px solid var(--divider); white-space:pre;}
+  .bsw-secretname{display:inline-block; font-family:'Roboto Mono',monospace; font-size:12.5px; background:var(--surface2); color:var(--accent); padding:3px 9px; border-radius:6px; margin-bottom:8px;}
+  .bsw-engterm{font-family:'Roboto Mono',monospace; font-size:11px; background:var(--surface); padding:1px 6px; border-radius:5px; color:var(--text); direction:ltr; display:inline-block;}
+
+  .bsw-infobox{margin:16px 18px 8px; background:var(--surface2); border-radius:14px; border:1px solid var(--divider); overflow:hidden;}
+  .bsw-infobox-head{padding:13px 16px; display:flex; align-items:center; justify-content:space-between; cursor:pointer; font-size:12.5px; font-weight:600; color:var(--accent);}
+  .bsw-infobox-head .bsw-chev{transform:rotate(180deg); transition:transform .25s; font-size:11px; color:var(--muted);}
+  .bsw-infobox.open .bsw-infobox-head .bsw-chev{transform:rotate(0deg);}
+  .bsw-infobox-body{max-height:0; overflow:hidden; transition:max-height .4s ease;}
+  .bsw-infobox.open .bsw-infobox-body{max-height:220px;}
+  .bsw-infobox.open.tall .bsw-infobox-body{max-height:900px;}
+  .bsw-infobox-body p{margin:0; padding:0 16px 14px; font-size:12px; color:var(--muted); line-height:1.7;}
+  .bsw-footer{margin:36px 18px 0; text-align:center; font-size:11px; color:var(--muted); line-height:1.8;}
+
+  /* ---- Debts & recurring charges screen ---- */
+  .dsection{margin:26px 18px 10px; display:flex; align-items:center; justify-content:space-between;}
+  .dsection h3{margin:0; font-size:13.5px; font-weight:700; color:var(--text); display:flex; align-items:center; gap:7px;}
+  .dsection .dcount{font-size:11px; color:var(--muted); font-family:'Roboto Mono',monospace; background:var(--surface); padding:3px 9px; border-radius:20px; border:1px solid #2f333a;}
+
+  .targetcard{
+    margin:10px 18px 0; padding:18px 20px; border-radius:18px; position:relative; overflow:hidden;
+    background:linear-gradient(145deg,#20241a,#1b1d22); border:1px solid #3a3d2c;
+  }
+  .targetcard::before{content:"";position:absolute; inset:0; background:radial-gradient(circle at 100% 0%, rgba(63,178,127,.10), transparent 60%); pointer-events:none;}
+  .targetlabel{font-size:11px; color:var(--muted); letter-spacing:.5px; display:flex; align-items:center; gap:6px;}
+  .targetamt{font-family:'Roboto Mono',monospace; font-size:32px; font-weight:700; color:var(--paid); margin-top:6px; direction:ltr; text-align:right;}
+  .targetamt span{font-size:16px; opacity:.75; margin-right:4px;}
+  .targetsub{margin-top:8px; font-size:12px; color:var(--muted); display:flex; flex-wrap:wrap; gap:5px 14px;}
+  .targetsub b{color:var(--text); font-family:'Roboto Mono',monospace;}
+  .targetbreak{margin-top:12px; padding-top:12px; border-top:1px solid #33372a; display:flex; flex-direction:column; gap:6px;}
+  .targetbreakrow{display:flex; align-items:center; justify-content:space-between; font-size:12px; color:var(--muted);}
+  .targetbreakrow b{color:var(--text); font-family:'Roboto Mono',monospace; font-weight:600;}
+
+  .dcard{
+    position:relative; margin-bottom:10px; padding:15px 16px; border-radius:16px; background:var(--surface);
+    border:1px solid #2f333a; overflow:hidden;
+  }
+  .dcard.dueflag{border-color:#5a3a26;}
+  .dcard.done{opacity:.6;}
+  .dcardtop{display:flex; align-items:center; gap:12px;}
+  .davatar{
+    width:40px; height:40px; border-radius:12px; flex-shrink:0; display:flex; align-items:center; justify-content:center;
+    font-size:16px; font-weight:700; background:var(--surface2); color:var(--accent); font-family:'Heebo',sans-serif;
+  }
+  .davatar.done{background:var(--paid-dim); color:var(--paid);}
+  .dcardhead{flex:1; min-width:0;}
+  .dname{font-size:14.5px; font-weight:700; display:flex; align-items:center; gap:6px;}
+  .dsub{font-size:11.5px; color:var(--muted); margin-top:2px; font-family:'Roboto Mono',monospace;}
+  .dpct{font-family:'Roboto Mono',monospace; font-size:13px; font-weight:700; color:var(--accent); flex-shrink:0;}
+  .dpct.done{color:var(--paid);}
+  .dbar{width:100%; height:9px; border-radius:8px; background:var(--surface2); overflow:hidden; margin-top:12px;}
+  .dbarfill{height:100%; border-radius:8px; background:linear-gradient(90deg,#d99a00,var(--accent)); transition:width .5s ease;}
+  .dbarfill.done{background:linear-gradient(90deg,var(--paid),#6fe3ab);}
+  .dchips{display:flex; flex-wrap:wrap; gap:6px; margin-top:12px;}
+  .dchip{
+    font-size:11px; padding:5px 10px; border-radius:20px; background:var(--surface2); color:var(--muted);
+    display:flex; align-items:center; gap:5px; font-weight:500; white-space:nowrap; flex-shrink:0;
+  }
+  .dchip.due{background:var(--accent-dim); color:var(--accent);}
+  .dchip.overdue{background:var(--unpaid-dim); color:var(--unpaid); font-weight:700;}
+  .dnote{
+    margin-top:10px; padding:9px 11px; border-radius:11px; background:var(--surface2); font-size:12px;
+    color:var(--muted); line-height:1.5; display:flex; gap:7px; align-items:flex-start;
+  }
+  .dnote .ic{flex-shrink:0; margin-top:1px;}
+  .dactions{display:flex; gap:8px; margin-top:12px;}
+  .dactions .fuelbtn{padding:10px; font-size:12.5px;}
+  .addcard{
+    margin-bottom:10px; padding:16px; border-radius:16px; border:1.5px dashed #3a3e44; background:transparent;
+    color:var(--muted); text-align:center; font-size:13px; font-weight:600; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+  }
+  .addcard:active{background:var(--surface); color:var(--text);}
+  .noteinput{
+    width:100%; padding:12px; border-radius:12px; background:var(--surface2); border:1px solid #3a3e44;
+    color:var(--text); font-family:'Heebo',sans-serif; font-size:13px; margin-bottom:10px; direction:rtl;
+    resize:none; min-height:52px; line-height:1.5;
+  }
+  .fieldlabel{font-size:11.5px; color:var(--muted); margin:2px 0 6px;}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<div class="overlay" id="overlay">
+  <div class="sheet" id="sheet"></div>
+</div>
+
+<script>
+const STORAGE_KEY = 'entries_v1';
+const TASKS_KEY = 'tasks_v1';
+const VOICE_KEY = 'voicenotes_v1';
+const WORKDAY_KEY = 'workday_v1';
+const WORKDAY_HISTORY_KEY = 'workdayhistory_v1';
+const GOAL_KEY = 'dailygoal_v1';
+const DEBTS_KEY = 'debts_v1';
+const DEBT_PAYMENTS_KEY = 'debtpayments_v1';
+const RECURRING_KEY = 'recurring_v1';
+const EXTRA_INCOME_KEY = 'extraincome_v1';
+const WORKDAYS_PATTERN_KEY = 'workdayspattern_v1';
+const WORK_EXCEPTIONS_KEY = 'workexceptions_v1';
+let entries = [];
+let tasks = [];
+let voiceNotes = [];
+let workdayStart = null;
+let workdayHistory = [];
+let viewingWorkdayId = null;
+let dailyGoal = null;
+let goalConfettiShownFor = null;
+let notifiedTaskAlerts = new Set(); // tracks which task alerts already fired, e.g. 'taskId-soon' / 'taskId-over'
+let debts = [];
+let debtPayments = [];
+let recurringCharges = [];
+let extraIncomes = [];
+let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'reminders'
+let debtEditTargetId = null;
+let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
+let workExceptions = []; // [{date:'YYYY-MM-DD', working:false}] overrides the weekly pattern for a specific date
+let debtRemindersChecked = false;
+let period = 'today';
+let draft = null; // {kind:'passenger'|'delivery'|'install'|'fuel', digits:'', commissionPct:number}
+let editTargetId = null; // set when adding debtor info to an already-saved entry
+let lastCommissionPct = { passenger:0, delivery:12, install:0 };
+
+const OWNER_EMAIL = '0556742061r@gmail.com';
+function isOwnerAccount(){
+  return currentUserEmail && currentUserEmail.toLowerCase() === OWNER_EMAIL.toLowerCase();
+}
+
+const CATS = {
+  passenger:{label:'נסיעה', ic:'🚕'},
+  delivery:{label:'משלוח', ic:'📦'},
+  install:{label:'התקנה', ic:'🔧'},
+  fuel:{label:'דלק', ic:'⛽'},
+  food:{label:'אוכל', ic:'🍔'}
+};
+const EXPENSE_KINDS = ['fuel','food'];
+function isExpenseKind(k){ return EXPENSE_KINDS.includes(k); }
+
+function fmt(n){
+  return '₪' + n.toLocaleString('he-IL', {minimumFractionDigits: n % 1 === 0 ? 0 : 2, maximumFractionDigits:2});
+}
+
+function netOf(e){
+  if(isExpenseKind(e.kind)) return -e.amount;
+  if(e.status==='cancelled'){
+    if(e.commissionPct>0 && e.chargeStatus==='charged') return -(e.amount * (e.commissionPct/100));
+    return 0;
+  }
+  const gross = e.amount;
+  return gross * (1 - (e.commissionPct||0)/100);
+}
+
+function startOfPeriod(p){
+  const d = new Date();
+  d.setHours(0,0,0,0);
+  if(p==='week'){ const day = d.getDay(); d.setDate(d.getDate()-day); return d; }
+  if(p==='month'){ d.setDate(1); return d; }
+  return new Date(0);
+}
+
+function filtered(){
+  if(period==='today'){
+    let start, end;
+    if(viewingWorkdayId){
+      const wd = workdayHistory.find(w=>w.id===viewingWorkdayId);
+      start = wd ? wd.start : workdayStart;
+      end = wd ? wd.end : Infinity;
+    } else {
+      start = workdayStart;
+      end = Infinity;
+    }
+    return entries.filter(e => e.ts >= start && e.ts < end).sort((a,b)=>b.ts-a.ts);
+  }
+  const start = startOfPeriod(period).getTime();
+  return entries.filter(e => e.ts >= start).sort((a,b)=>b.ts-a.ts);
+}
+
+function currentTs(){
+  // If we're viewing (and adding to) a past workday, place new entries inside that day's range
+  if(viewingWorkdayId){
+    const wd = workdayHistory.find(w=>w.id===viewingWorkdayId);
+    if(wd){
+      const count = entries.filter(e=>e.ts>=wd.start && e.ts<wd.end).length;
+      let t = wd.start + count*1000;
+      if(t >= wd.end) t = wd.end - 1000;
+      return t;
+    }
+  }
+  return Date.now();
+}
+
+function endWorkday(){
+  const ok = confirm('לסיים את יום העבודה הנוכחי? כל מה שתזין מעכשיו ייספר כיום עבודה חדש.');
+  if(!ok) return;
+  const now = Date.now();
+  workdayHistory.push({ id:'wd'+now+Math.random().toString(36).slice(2,6), start: workdayStart, end: now });
+  saveWorkdayHistory();
+  workdayStart = now;
+  saveWorkdayStart();
+  viewingWorkdayId = null;
+  render();
+}
+function openWorkdayStartEdit(){
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  const d = new Date(workdayStart);
+  const pad = n=>String(n).padStart(2,'0');
+  const dtVal = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const lastClosed = [...workdayHistory].sort((a,b)=>b.end-a.end)[0];
+  sheet.innerHTML = `
+    <h2>✏️ תיקון שעת תחילת יום העבודה</h2>
+    <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:12px;">
+      אם היום "התאפס" לבד באמצע (למשל בגלל תקלה), אפשר לתקן כאן ידנית מתי באמת התחיל יום העבודה.
+    </div>
+    <input id="workdayStartInput" class="goalinput" style="font-size:16px;" type="datetime-local" value="${dtVal}">
+    <div class="saverow" style="margin-top:14px;">
+      <button class="savebtn single" onclick="submitWorkdayStartEdit()">💾 שמירה</button>
+    </div>
+    ${lastClosed ? `<div class="contacttoggle" onclick="mergeLastClosedWorkday('${lastClosed.id}')">🔗 מיזוג עם היום הקודם שנסגר (${new Date(lastClosed.start).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}–${new Date(lastClosed.end).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})})</div>` : ''}
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitWorkdayStartEdit(){
+  const val = document.getElementById('workdayStartInput').value;
+  if(!val) return;
+  const ts = new Date(val).getTime();
+  if(isNaN(ts)) return;
+  workdayStart = ts;
+  saveWorkdayStart();
+  closeSheet();
+  render();
+}
+function mergeLastClosedWorkday(id){
+  const wd = workdayHistory.find(w=>w.id===id);
+  if(!wd) return;
+  if(!confirm('זה ימחק את הפיצול ויאחד את הימים חזרה יחד. להמשיך?')) return;
+  workdayHistory = workdayHistory.filter(w=>w.id!==id);
+  workdayStart = wd.start;
+  saveWorkdayHistory();
+  saveWorkdayStart();
+  viewingWorkdayId = null;
+  closeSheet();
+  render();
+}
+function viewWorkday(id){
+  viewingWorkdayId = id;
+  period = 'today';
+  render();
+}
+function exitWorkdayView(){
+  viewingWorkdayId = null;
+  render();
+}
+function openWorkdayHistory(){
+  draft = null; editTargetId = null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  const sorted = [...workdayHistory].sort((a,b)=>b.start-a.start);
+  sheet.innerHTML = `
+    <h2>📅 ימי עבודה קודמים</h2>
+    ${sorted.length===0 ? `<div style="color:var(--muted); font-size:13px; padding:10px 0 20px;">עדיין לא סיימת אף יום עבודה. לוחצים "🌙 סיום יום עבודה" בעמוד הראשי כשמסיימים לנהוג.</div>` : sorted.map(wd=>{
+      const s = new Date(wd.start), e = new Date(wd.end);
+      const dateStr = s.toLocaleDateString('he-IL',{weekday:'short', day:'2-digit', month:'2-digit'});
+      const rangeStr = s.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}) + ' – ' + e.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+      const count = entries.filter(x=>x.ts>=wd.start && x.ts<wd.end).length;
+      return `
+        <div class="task ok" style="cursor:pointer;" onclick="viewWorkday('${wd.id}'); closeSheet();">
+          <div class="taskmid">
+            <div class="taskttl">${dateStr}</div>
+            <div class="tasktime">${rangeStr} · ${count} רשומות</div>
+          </div>
+        </div>`;
+    }).join('')}
+    <div class="cancel" onclick="closeSheet()">סגירה</div>
+  `;
+}
+
+const hasClaudeStorage = (typeof window.storage !== 'undefined' && window.storage);
+
+// ---- Firebase setup ----
+const firebaseConfig = {
+  apiKey: "AIzaSyC-9fQ1ScsVbNhT6DgyKgb5FgoTq40H0Ac",
+  authDomain: "driver-1353c.firebaseapp.com",
+  projectId: "driver-1353c",
+  storageBucket: "driver-1353c.firebasestorage.app",
+  messagingSenderId: "304713971262",
+  appId: "1:304713971262:web:94ae67980fd4af923d836f"
+};
+let fbApp = null, auth = null, db = null, currentUid = null, currentUserEmail = '';
+let fbUnsubscribers = [];
+let firebaseReady = false;
+try{
+  fbApp = firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.firestore();
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(err=>console.error('persistence set failed', err));
+  firebaseReady = true;
+}catch(e){ console.error('Firebase init failed, falling back to local-only mode', e); }
+
+async function storageGet(key){
+  // Always reads from this device's local storage (used for reading pre-cloud data & migration)
+  try{
+    if(hasClaudeStorage){
+      const r = await window.storage.get(key, false);
+      return r ? JSON.parse(r.value) : [];
+    } else {
+      const raw = localStorage.getItem(key);
+      return raw ? JSON.parse(raw) : [];
+    }
+  }catch(e){ return []; }
+}
+async function storageSet(key, value){
+  try{
+    if(currentUid && db){
+      const json = JSON.stringify(value);
+      if(json.length > 900000){
+        alert('יש יותר מדי נתונים לשמור בבת אחת (בדרך כלל בגלל הקלטות קול כבדות) - מחק כמה הקלטות ישנות שכבר טופלו ונסה שוב.');
+        return;
+      }
+      await db.collection('users').doc(currentUid).collection('data').doc(key).set({ value: json, updatedAt: Date.now() });
+    } else if(hasClaudeStorage){
+      await window.storage.set(key, JSON.stringify(value), false);
+    } else {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+  }catch(e){ console.error('storageSet failed', e); }
+}
+
+function fbDocRef(key){ return db.collection('users').doc(currentUid).collection('data').doc(key); }
+
+function detachFirestoreListeners(){
+  fbUnsubscribers.forEach(u=>{ try{ u(); }catch(e){} });
+  fbUnsubscribers = [];
+}
+
+async function attachFirestoreListeners(){
+  detachFirestoreListeners();
+
+  // Resolve entries + workday start together first, synchronously, to avoid a race
+  // where the workday listener fires before entries have loaded and wrongly resets the clock.
+  try{
+    const [entriesDoc, workdayDoc] = await Promise.all([
+      fbDocRef(STORAGE_KEY).get(),
+      fbDocRef(WORKDAY_KEY).get()
+    ]);
+    const ed = entriesDoc.data();
+    entries = (ed && ed.value) ? JSON.parse(ed.value) : [];
+    const wd = workdayDoc.data();
+    const wsArr = (wd && wd.value) ? JSON.parse(wd.value) : [];
+    if(wsArr && wsArr.length){
+      workdayStart = wsArr[0];
+    } else {
+      workdayStart = entries.length ? 0 : Date.now();
+      saveWorkdayStart();
+    }
+    render();
+  }catch(e){ console.error('initial sync failed', e); }
+
+  fbUnsubscribers.push(fbDocRef(STORAGE_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    entries = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(TASKS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    tasks = (d && d.value) ? JSON.parse(d.value) : [];
+    cleanupOrphanedBankAlertTasks();
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(VOICE_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    voiceNotes = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(WORKDAY_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    const arr = (d && d.value) ? JSON.parse(d.value) : [];
+    if(arr && arr.length){
+      workdayStart = arr[0];
+      render();
+    }
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(WORKDAY_HISTORY_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    workdayHistory = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(GOAL_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    const arr = (d && d.value) ? JSON.parse(d.value) : [];
+    dailyGoal = (arr && arr.length) ? arr[0] : null;
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(DEBTS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    debts = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+    checkMonthlyDebtReminders();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(DEBT_PAYMENTS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    debtPayments = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(RECURRING_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    recurringCharges = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+    checkMonthlyRecurringReminders();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(EXTRA_INCOME_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    extraIncomes = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(WORKDAYS_PATTERN_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    const arr = (d && d.value) ? JSON.parse(d.value) : [];
+    if(arr && arr.length===7) workDaysPattern = arr;
+    render();
+  }, err=>console.error(err)));
+  fbUnsubscribers.push(fbDocRef(WORK_EXCEPTIONS_KEY).onSnapshot(doc=>{
+    const d = doc.data();
+    workExceptions = (d && d.value) ? JSON.parse(d.value) : [];
+    render();
+  }, err=>console.error(err)));
+}
+
+async function checkAndOfferLocalImport(){
+  try{
+    const cloudDoc = await fbDocRef(STORAGE_KEY).get();
+    const hasCloudData = cloudDoc.exists && cloudDoc.data().value && JSON.parse(cloudDoc.data().value).length > 0;
+    if(hasCloudData) return;
+    const localEntries = await storageGet(STORAGE_KEY);
+    if(localEntries && localEntries.length > 0){
+      const ok = confirm(`נמצאו ${localEntries.length} רשומות שמורות במכשיר הזה (מלפני ההתחברות). לייבא אותן לחשבון שלך?`);
+      if(!ok) return;
+      const [localTasks, localVoice, localWD, localWH, localDebts, localDebtPayments, localRecurring, localExtraIncome] = await Promise.all([
+        storageGet(TASKS_KEY), storageGet(VOICE_KEY), storageGet(WORKDAY_KEY), storageGet(WORKDAY_HISTORY_KEY),
+        storageGet(DEBTS_KEY), storageGet(DEBT_PAYMENTS_KEY), storageGet(RECURRING_KEY), storageGet(EXTRA_INCOME_KEY)
+      ]);
+      await storageSet(STORAGE_KEY, localEntries);
+      if(localTasks && localTasks.length) await storageSet(TASKS_KEY, localTasks);
+      if(localVoice && localVoice.length) await storageSet(VOICE_KEY, localVoice);
+      if(localWD && localWD.length) await storageSet(WORKDAY_KEY, localWD);
+      if(localWH && localWH.length) await storageSet(WORKDAY_HISTORY_KEY, localWH);
+      if(localDebts && localDebts.length) await storageSet(DEBTS_KEY, localDebts);
+      if(localDebtPayments && localDebtPayments.length) await storageSet(DEBT_PAYMENTS_KEY, localDebtPayments);
+      if(localRecurring && localRecurring.length) await storageSet(RECURRING_KEY, localRecurring);
+      if(localExtraIncome && localExtraIncome.length) await storageSet(EXTRA_INCOME_KEY, localExtraIncome);
+      alert('הנתונים יובאו בהצלחה! ✅');
+    }
+  }catch(e){ console.error('import check failed', e); }
+}
+
+async function load(){
+  // Local-only fallback mode (used only if Firebase failed to initialize)
+  entries = await storageGet(STORAGE_KEY);
+  tasks = await storageGet(TASKS_KEY);
+  voiceNotes = await storageGet(VOICE_KEY);
+  const wsArr = await storageGet(WORKDAY_KEY);
+  workdayStart = (wsArr && wsArr.length) ? wsArr[0] : null;
+  if(workdayStart === null){
+    workdayStart = entries.length ? 0 : Date.now();
+    saveWorkdayStart();
+  }
+  workdayHistory = await storageGet(WORKDAY_HISTORY_KEY);
+  const goalArr = await storageGet(GOAL_KEY);
+  dailyGoal = (goalArr && goalArr.length) ? goalArr[0] : null;
+  debts = await storageGet(DEBTS_KEY);
+  debtPayments = await storageGet(DEBT_PAYMENTS_KEY);
+  recurringCharges = await storageGet(RECURRING_KEY);
+  extraIncomes = await storageGet(EXTRA_INCOME_KEY);
+  const wdpArr = await storageGet(WORKDAYS_PATTERN_KEY);
+  if(wdpArr && wdpArr.length===7) workDaysPattern = wdpArr;
+  workExceptions = await storageGet(WORK_EXCEPTIONS_KEY);
+  render();
+  checkMonthlyDebtReminders();
+  checkMonthlyRecurringReminders();
+  autoApplyInstallmentSuggestions();
+  checkMixedMerchantAlerts();
+  checkBankRecurringPriceIncreases();
+}
+function save(){ storageSet(STORAGE_KEY, entries); }
+function saveTasks(){ storageSet(TASKS_KEY, tasks); }
+function saveVoiceNotes(){ storageSet(VOICE_KEY, voiceNotes); }
+function saveWorkdayStart(){ storageSet(WORKDAY_KEY, [workdayStart]); }
+function saveWorkdayHistory(){ storageSet(WORKDAY_HISTORY_KEY, workdayHistory); }
+function saveDailyGoal(){ storageSet(GOAL_KEY, dailyGoal===null ? [] : [dailyGoal]); }
+function saveDebts(){ storageSet(DEBTS_KEY, debts); }
+function saveDebtPayments(){ storageSet(DEBT_PAYMENTS_KEY, debtPayments); }
+function saveRecurring(){ storageSet(RECURRING_KEY, recurringCharges); }
+function saveExtraIncomes(){ storageSet(EXTRA_INCOME_KEY, extraIncomes); }
+function saveWorkDaysPattern(){ storageSet(WORKDAYS_PATTERN_KEY, workDaysPattern); }
+function fullResetDebtsPage(){
+  const confirmText = 'למחוק';
+  const typed = prompt(`⚠️ זה ימחק לגמרי הכל בעמוד הזה: כל בעלי החוב, כל החיובים הקבועים, וכל ההכנסות הנוספות.\n\nזה לא ניתן לביטול.\n\nכדי לאשר, תקליד את המילה "${confirmText}" (בלי גרשיים) ותלחץ אישור:`);
+  if(typed !== confirmText) return;
+  debts = [];
+  debtPayments = [];
+  saveDebts();
+  saveDebtPayments();
+  recurringCharges = [];
+  saveRecurring();
+  extraIncomes = [];
+  saveExtraIncomes();
+  const beforeCount = tasks.length;
+  tasks = tasks.filter(t => !(typeof t.id==='string' && (
+    t.id.startsWith('debtdue-') ||
+    t.id.startsWith('recdue-')
+  )));
+  if(tasks.length !== beforeCount) saveTasks();
+  render();
+  alert('הכל אופס. אפשר להתחיל להזין מחדש.');
+}
+function saveWorkExceptions(){ storageSet(WORK_EXCEPTIONS_KEY, workExceptions); }
+
+// ---- Auth screens & actions ----
+let authMode = 'login';
+function renderLoginScreen(){
+  document.getElementById('overlay').classList.remove('open');
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="loginwrap">
+      <div class="loginlogo">
+        <div class="em">🚕</div>
+        <h1>המונה שלי</h1>
+        <p>נהל את הנסיעות, המשלוחים וההכנסות שלך</p>
+      </div>
+      <div class="logincard">
+        <div class="autherr" id="authErr"></div>
+        <button class="googlebtn" onclick="signInGoogle()">
+          <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84c-.21 1.13-.85 2.09-1.8 2.73v2.27h2.92c1.7-1.57 2.68-3.88 2.68-6.64z"/><path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.27c-.81.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.71H.96v2.33C2.44 15.98 5.48 18 9 18z"/><path fill="#FBBC05" d="M3.97 10.7c-.18-.54-.28-1.11-.28-1.7s.1-1.16.28-1.7V4.97H.96C.35 6.17 0 7.55 0 9s.35 2.83.96 4.03l3.01-2.33z"/><path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.89 11.43 0 9 0 5.48 0 2.44 2.02.96 4.97l3.01 2.33C4.68 5.16 6.66 3.58 9 3.58z"/></svg>
+          <span>המשך עם Google</span>
+        </button>
+        <div class="divider">או</div>
+        <input id="authEmail" class="authinput" type="email" placeholder="אימייל" autocomplete="email">
+        <input id="authPassword" class="authinput" type="password" placeholder="סיסמה" autocomplete="current-password">
+        <button class="authsubmit" onclick="submitEmailAuth()">${authMode==='login' ? 'התחברות' : 'הרשמה'}</button>
+        <div class="authtoggle">
+          ${authMode==='login' ? 'אין לך חשבון? <b onclick="toggleAuthMode()">להרשמה</b>' : 'כבר יש לך חשבון? <b onclick="toggleAuthMode()">להתחברות</b>'}
+        </div>
+      </div>
+    </div>
+  `;
+}
+function toggleAuthMode(){ authMode = (authMode==='login') ? 'signup' : 'login'; renderLoginScreen(); }
+function showAuthErr(msg){
+  const el = document.getElementById('authErr');
+  if(el){ el.textContent = msg; el.style.display = 'block'; }
+}
+function translateAuthError(code){
+  const map = {
+    'auth/invalid-email':'כתובת אימייל לא תקינה.',
+    'auth/user-not-found':'לא נמצא חשבון עם המייל הזה.',
+    'auth/wrong-password':'סיסמה שגויה.',
+    'auth/email-already-in-use':'כבר יש חשבון עם המייל הזה - נסה להתחבר במקום להירשם.',
+    'auth/weak-password':'הסיסמה חייבת להכיל לפחות 6 תווים.',
+    'auth/invalid-credential':'פרטי ההתחברות שגויים.',
+    'auth/popup-closed-by-user':'ההתחברות בוטלה.',
+    'auth/network-request-failed':'בעיית רשת - בדוק את החיבור לאינטרנט.'
+  };
+  return map[code] || ('שגיאה: ' + code);
+}
+function signInGoogle(){
+  if(!firebaseReady){ alert('החיבור לשרת לא זמין כרגע.'); return; }
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(err=>showAuthErr(translateAuthError(err.code)));
+}
+function submitEmailAuth(){
+  if(!firebaseReady){ alert('החיבור לשרת לא זמין כרגע.'); return; }
+  const email = (document.getElementById('authEmail').value||'').trim();
+  const pass = document.getElementById('authPassword').value||'';
+  if(!email || !pass){ showAuthErr('נא למלא אימייל וסיסמה.'); return; }
+  const action = (authMode==='login')
+    ? auth.signInWithEmailAndPassword(email, pass)
+    : auth.createUserWithEmailAndPassword(email, pass);
+  action.catch(err=>showAuthErr(translateAuthError(err.code)));
+}
+function signOutUser(){
+  if(!confirm('להתנתק מהחשבון?')) return;
+  detachFirestoreListeners();
+  auth.signOut();
+}
+
+if(firebaseReady){
+  document.getElementById('app').innerHTML = `<div class="authloading">טוען...</div>`;
+  auth.onAuthStateChanged(user=>{
+    if(user){
+      currentUid = user.uid;
+      currentUserEmail = user.email || '';
+      checkAndOfferLocalImport().then(attachFirestoreListeners);
+    } else {
+      currentUid = null;
+      currentUserEmail = '';
+      detachFirestoreListeners();
+      renderLoginScreen();
+    }
+  });
+} else {
+  load();
+}
+
+function addEntry(e){
+  entries.push(e);
+  save();
+  render();
+}
+let editTargetMode = 'statusChange'; // 'statusChange' (paid->unpaid via badge) or 'infoOnly' (pencil edit, any status)
+
+function togglePaid(id){
+  const e = entries.find(x=>x.id===id);
+  if(!e || e.status==='cancelled') return;
+  if(e.status==='paid'){
+    editTargetId = id;
+    editTargetMode = 'statusChange';
+    document.getElementById('overlay').classList.add('open');
+    renderDebtorSheet();
+  } else {
+    e.status = 'paid';
+    save(); render();
+  }
+}
+let amountEditCommissionPct = 0;
+
+function openAmountEdit(id){
+  editTargetId = id;
+  document.getElementById('overlay').classList.add('open');
+  const e = entries.find(x=>x.id===id);
+  if(!e) return;
+  amountEditCommissionPct = e.commissionPct || 0;
+  renderAmountEditSheet();
+}
+function renderAmountEditSheet(){
+  const e = entries.find(x=>x.id===editTargetId);
+  if(!e) return;
+  const amountInputEl = document.getElementById('amountEditInput');
+  const currentVal = amountInputEl ? amountInputEl.value : e.amount;
+  const showCommission = !isExpenseKind(e.kind) && e.kind !== 'install';
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>${CATS[e.kind].ic} עריכת סכום${showCommission ? ' ועמלה' : ''}</h2>
+    <input id="amountEditInput" class="goalinput" type="number" inputmode="decimal" value="${currentVal}">
+    ${showCommission ? `
+      <div class="commlabel" style="margin-top:6px;">אחוז עמלה שנלקח</div>
+      <div class="commquick">
+        <div class="qchip ${amountEditCommissionPct===0?'on':''}" onclick="setAmountEditCommission(0)">אין ניכוי</div>
+        <div class="qchip ${amountEditCommissionPct===12?'on':''}" onclick="setAmountEditCommission(12)">12%</div>
+        <input class="comminput" type="number" min="0" max="100" inputmode="decimal" placeholder="אחר %" value="${(amountEditCommissionPct!==0 && amountEditCommissionPct!==12) ? amountEditCommissionPct : ''}" oninput="amountEditCommissionPct = parseFloat(this.value)||0; document.querySelectorAll('.qchip').forEach(el=>el.classList.remove('on'));">
+      </div>
+    ` : ''}
+    <div class="saverow" style="margin-top:14px;">
+      <button class="savebtn single" onclick="submitAmountEdit()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function setAmountEditCommission(pct){
+  amountEditCommissionPct = pct;
+  renderAmountEditSheet();
+}
+function submitAmountEdit(){
+  const e = entries.find(x=>x.id===editTargetId);
+  if(!e) return;
+  const val = parseFloat(document.getElementById('amountEditInput').value || '0');
+  if(!val || val<=0) return;
+  e.amount = val;
+  if(!isExpenseKind(e.kind) && e.kind !== 'install'){
+    e.commissionPct = amountEditCommissionPct || 0;
+  }
+  save();
+  closeSheet();
+  render();
+}
+function openDebtorEdit(id){
+  editTargetId = id;
+  editTargetMode = 'infoOnly';
+  document.getElementById('overlay').classList.add('open');
+  renderDebtorSheet();
+}
+function renderDebtorSheet(){
+  const e = entries.find(x=>x.id===editTargetId);
+  if(!e) return;
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>👤 ${editTargetMode==='infoOnly' ? 'עריכת פרטי לקוח' : 'למי מחכים לתשלום?'}</h2>
+    <input id="debtorAmount" class="goalinput" type="number" inputmode="decimal" value="${e.amount}">
+    <div class="deadlinerow" style="margin-bottom:8px;">
+      <input id="debtorName" class="contactinput" style="width:100%;" type="text" placeholder="שם הלקוח (לא חובה)" value="${e.name||''}">
+    </div>
+    <div class="deadlinerow" style="margin-bottom:8px;">
+      <input id="debtorPhone" class="contactinput" style="width:100%;" type="tel" placeholder="טלפון (לא חובה)" value="${e.phone||''}">
+    </div>
+    <div class="expenserow" style="margin:0 0 10px;">
+      <div class="contacttoggle" style="flex:1;" onclick="pickContactInto('debtorName','debtorPhone')">📇 אנשי קשר</div>
+      <div class="contacttoggle" style="flex:1;" onclick="openWhatsAppApp()">📱 WhatsApp</div>
+    </div>
+    ${e.status==='unpaid' ? `
+      <div style="font-size:11.5px; color:var(--muted); margin:2px 0 6px; text-align:center;">⏰ תזכורת לגבייה (לא חובה)</div>
+      <input id="collectReminderInput" class="contactinput" style="width:100%; margin-bottom:10px;" type="datetime-local">
+    ` : ''}
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitDebtorEdit()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="${editTargetMode==='infoOnly' ? 'closeSheet()' : "submitDebtorEdit(true)"}">${editTargetMode==='infoOnly' ? 'ביטול' : 'דלג בלי פרטים'}</div>
+  `;
+}
+function submitDebtorEdit(skip){
+  const e = entries.find(x=>x.id===editTargetId);
+  if(!e) return;
+  const amountEl = document.getElementById('debtorAmount');
+  if(amountEl){
+    const newAmount = parseFloat(amountEl.value || '0');
+    if(newAmount > 0) e.amount = newAmount;
+  }
+  if(!skip){
+    e.name = (document.getElementById('debtorName').value || '').trim();
+    e.phone = (document.getElementById('debtorPhone').value || '').trim();
+  }
+  if(editTargetMode==='statusChange' && e.status !== 'cancelled') e.status = 'unpaid';
+  const reminderEl = document.getElementById('collectReminderInput');
+  if(reminderEl && reminderEl.value){
+    const ts = new Date(reminderEl.value).getTime();
+    if(!isNaN(ts)){
+      const nameTag = (e.name || '').trim();
+      tasks.push({
+        id: 'task'+Date.now()+Math.random().toString(36).slice(2,7),
+        title: `💸 לגבות${nameTag ? ' מ-'+nameTag : ''} · ${fmt(e.amount)}`,
+        deadline: ts,
+        done:false
+      });
+      saveTasks();
+    }
+  }
+  save();
+  closeSheet();
+  render();
+}
+function openWhatsAppApp(){
+  window.location.href = 'whatsapp://';
+}
+async function pickContactInto(nameFieldId, phoneFieldId){
+  if(!(navigator.contacts && navigator.contacts.select)){
+    alert('הדפדפן הזה לא תומך בייבוא אנשי קשר. אפשר להזין ידנית, או לוודא שאתה נכנס דרך כתובת https ולא קובץ מקומי.');
+    return;
+  }
+  try{
+    const picked = await navigator.contacts.select(['name','tel'], { multiple:false });
+    if(picked && picked.length){
+      const c = picked[0];
+      const nameEl = document.getElementById(nameFieldId);
+      const phoneEl = document.getElementById(phoneFieldId);
+      if(nameEl && c.name && c.name[0]) nameEl.value = c.name[0];
+      if(phoneEl && c.tel && c.tel[0]) phoneEl.value = c.tel[0];
+      if(draft){ draft.name = nameEl ? nameEl.value : draft.name; draft.phone = phoneEl ? phoneEl.value : draft.phone; }
+    }
+  }catch(err){ /* user cancelled the picker */ }
+}
+function cycleCharge(id){
+  const e = entries.find(x=>x.id===id);
+  if(!e) return;
+  const order = ['pending','charged','cleared'];
+  const i = order.indexOf(e.chargeStatus);
+  e.chargeStatus = order[(i+1) % order.length];
+  save(); render();
+}
+
+function toggleTaskDone(id){
+  const t = tasks.find(x=>x.id===id);
+  if(t){ t.done = true; saveTasks(); render(); }
+}
+function removeTask(id){
+  tasks = tasks.filter(x=>x.id!==id);
+  saveTasks(); render();
+}
+function resetAllData(){
+  const ok = confirm('בטוח שברצונך למחוק את כל הנסיעות, המשלוחים וההתקנות שהזנת? הפעולה הזו לא ניתנת לביטול.');
+  if(!ok) return;
+  entries = [];
+  save();
+  render();
+}
+function openTaskModal(){
+  draft = null;
+  document.getElementById('overlay').classList.add('open');
+  renderTaskSheet();
+}
+function renderTaskSheet(){
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>⏰ הוספת תזכורת</h2>
+    <input id="taskTitle" class="taskinput" type="text" placeholder="לדוגמה: משלוח לבני ברק">
+    <input id="taskTime" class="taskinput" type="time" value="${hh}:${mm}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="commitTask()"><span>💾</span><span>שמירת תזכורת</span></button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function commitTask(){
+  const titleEl = document.getElementById('taskTitle');
+  const timeEl = document.getElementById('taskTime');
+  const title = titleEl.value.trim();
+  const timeVal = timeEl.value;
+  if(!title || !timeVal) return;
+  const [h,m] = timeVal.split(':').map(Number);
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+  tasks.push({
+    id: 'task'+Date.now()+Math.random().toString(36).slice(2,7),
+    title, deadline: d.getTime(), done:false
+  });
+  saveTasks();
+  closeSheet();
+  render();
+}
+
+// ---- Voice memo recorder ----
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordingTimerHandle = null;
+let recordingSeconds = 0;
+let previewBlob = null;
+
+// Press-and-hold quick recording (primary flow): hold the FAB to record, release to auto-save.
+let fabRecording = false;
+let fabStartTime = 0;
+
+function fabStart(e){
+  if(e && e.preventDefault) e.preventDefault();
+  if(fabRecording) return;
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    alert('הדפדפן הזה לא תומך בהקלטת קול, או שהאתר לא נטען דרך חיבור מאובטח (https). נסה לפתוח את הקישור ישירות ב-Chrome או Safari הרגילים, לא מתוך אפליקציה אחרת (וואטסאפ וכו׳).');
+    return;
+  }
+  try{
+    navigator.mediaDevices.getUserMedia({ audio:true }).then(stream=>{
+      fabRecording = true;
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(stream);
+      mediaRecorder.ondataavailable = ev=>{ if(ev.data && ev.data.size>0) recordedChunks.push(ev.data); };
+      mediaRecorder.onstop = ()=>{
+        stream.getTracks().forEach(t=>t.stop());
+        clearInterval(recordingTimerHandle);
+        const toast = document.getElementById('recToast');
+        const fabEl = document.getElementById('fabRec');
+        if(toast) toast.style.display = 'none';
+        if(fabEl) fabEl.classList.remove('recording');
+        const elapsed = Math.max(1, Math.round((Date.now() - fabStartTime) / 1000));
+        fabRecording = false;
+        if(elapsed < 1 || recordedChunks.length === 0) return; // too short / accidental touch — discard silently
+        const blob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = function(){
+          voiceNotes.push({
+            id: 'v'+Date.now()+Math.random().toString(36).slice(2,7),
+            ts: Date.now(),
+            durationSec: elapsed,
+            tag: '',
+            mime: blob.type,
+            base64: reader.result,
+            reviewed:false
+          });
+          saveVoiceNotes();
+          render();
+        };
+        reader.readAsDataURL(blob);
+      };
+      mediaRecorder.start();
+      fabStartTime = Date.now();
+      const fabEl = document.getElementById('fabRec');
+      const toast = document.getElementById('recToast');
+      if(fabEl) fabEl.classList.add('recording');
+      if(toast){ toast.style.display = 'flex'; toast.textContent = '🔴 00:00'; }
+      recordingTimerHandle = setInterval(()=>{
+        const sec = Math.round((Date.now() - fabStartTime) / 1000);
+        if(toast) toast.textContent = '🔴 ' + durFmt(sec);
+      }, 300);
+    }).catch(err=>{
+      alert('לא הצלחתי לגשת למיקרופון. סיבה: ' + (err && err.message ? err.message : err) + '\n\nייתכן שההרשאה נדחתה, או שהמיקרופון תפוס באפליקציה אחרת.');
+    });
+  }catch(err){
+    alert('שגיאה בפתיחת ההקלטה: ' + (err && err.message ? err.message : err));
+  }
+}
+function fabStop(){
+  if(!fabRecording) return;
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    mediaRecorder.stop();
+  }
+}
+
+function openRecorder(){
+  draft = null;
+  editTargetId = null;
+  recordingSeconds = 0;
+  previewBlob = null;
+  recordedChunks = [];
+  document.getElementById('overlay').classList.add('open');
+  renderRecorderSheet('idle');
+}
+
+function renderRecorderSheet(state){
+  const sheet = document.getElementById('sheet');
+  if(state==='idle'){
+    sheet.innerHTML = `
+      <h2>🎙️ הקלטת הודעה קולית</h2>
+      <div style="text-align:center; padding:26px 0 10px;">
+        <button class="recbtn" onclick="startRecording()">🎙️</button>
+        <div style="margin-top:16px; color:var(--muted); font-size:13px;">לחץ כדי להתחיל להקליט</div>
+      </div>
+      <div class="cancel" onclick="closeSheet()">ביטול</div>
+    `;
+  } else if(state==='recording'){
+    sheet.innerHTML = `
+      <h2>🔴 מקליט...</h2>
+      <div style="text-align:center; padding:20px 0 10px;">
+        <div class="rectimer mono" id="recTimer">00:00</div>
+        <button class="recbtn stop" onclick="stopRecording()">⏹️</button>
+        <div style="margin-top:16px; color:var(--muted); font-size:13px;">לחץ כדי לעצור ולשמור</div>
+      </div>
+    `;
+  } else if(state==='preview'){
+    const url = URL.createObjectURL(previewBlob);
+    sheet.innerHTML = `
+      <h2>✅ ההקלטה מוכנה (${durFmt(recordingSeconds)})</h2>
+      <audio controls src="${url}" style="width:100%; margin-bottom:16px; filter:invert(.88) hue-rotate(180deg);"></audio>
+      <input id="noteTag" class="contactinput" style="width:100%; margin-bottom:14px;" type="text" placeholder="תיוג קצר (לא חובה, למשל: לקוח X)">
+      <div class="saverow">
+        <button class="savebtn paid" onclick="saveVoiceNote()">💾 שמירה</button>
+        <button class="savebtn cancelbtn" onclick="openRecorder()">🔁 מחדש</button>
+      </div>
+      <div class="cancel" onclick="closeSheet()">מחיקה וביטול</div>
+    `;
+  } else if(state==='error'){
+    sheet.innerHTML = `
+      <h2>⚠️ לא ניתן להקליט</h2>
+      <div style="color:var(--muted); font-size:13px; line-height:1.8; padding:6px 0 22px;">
+        לא הצלחתי לקבל גישה למיקרופון. זה קורה בדרך כלל כשהקובץ נפתח ישירות מההורדות ולא דרך אתר מאובטח, או שהרשאת המיקרופון לא אושרה לדפדפן.
+      </div>
+      <div class="cancel" onclick="closeSheet()">סגירה</div>
+    `;
+  }
+}
+
+async function startRecording(){
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e)=>{ if(e.data && e.data.size>0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = ()=>{
+      previewBlob = new Blob(recordedChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+      stream.getTracks().forEach(t=>t.stop());
+      clearInterval(recordingTimerHandle);
+      renderRecorderSheet('preview');
+    };
+    mediaRecorder.start();
+    recordingSeconds = 0;
+    renderRecorderSheet('recording');
+    recordingTimerHandle = setInterval(()=>{
+      recordingSeconds++;
+      const el = document.getElementById('recTimer');
+      if(el) el.textContent = durFmt(recordingSeconds);
+    }, 1000);
+  }catch(err){
+    renderRecorderSheet('error');
+  }
+}
+function stopRecording(){
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    mediaRecorder.stop();
+  }
+}
+function saveVoiceNote(){
+  if(!previewBlob) return;
+  const tagEl = document.getElementById('noteTag');
+  const tag = tagEl ? tagEl.value.trim() : '';
+  const reader = new FileReader();
+  reader.onload = function(){
+    voiceNotes.push({
+      id: 'v'+Date.now()+Math.random().toString(36).slice(2,7),
+      ts: Date.now(),
+      durationSec: recordingSeconds,
+      tag,
+      mime: previewBlob.type,
+      base64: reader.result,
+      reviewed:false
+    });
+    saveVoiceNotes();
+    previewBlob = null;
+    closeSheet();
+    render();
+  };
+  reader.readAsDataURL(previewBlob);
+}
+
+function removeEntry(id){
+  entries = entries.filter(x=>x.id!==id);
+  save();
+  render();
+}
+
+function badgeFor(e){
+  if(isExpenseKind(e.kind)) return '';
+  if(e.status==='cancelled'){
+    if(!e.commissionPct) return `<span class="cancelledtag">בוטלה</span>`;
+    const labels = {pending:'לבדוק חיוב', charged:'חויבתי 12%', cleared:'בוטל בהצלחה'};
+    return `<button class="chargebadge ${e.chargeStatus}" onclick="cycleCharge('${e.id}')">${labels[e.chargeStatus]}</button>`;
+  }
+  return `<button class="badge ${e.status==='paid'?'paid':'unpaid'}" onclick="togglePaid('${e.id}')">${e.status==='paid'?'שולם':'טרם שולם'}</button>`;
+}
+
+function timeLabel(ts){
+  const d = new Date(ts);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dOnly = new Date(d); dOnly.setHours(0,0,0,0);
+  const diffDays = Math.round((today - dOnly)/86400000);
+  const hh = d.toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+  if(diffDays===0) return hh;
+  if(diffDays===1) return 'אתמול · ' + hh;
+  return d.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'}) + ' · ' + hh;
+}
+
+function openRemindersScreen(){
+  currentScreen = 'reminders';
+  render();
+}
+function renderRemindersScreen(){
+  const app = document.getElementById('app');
+  const open = tasks.filter(t=>!t.done);
+  app.innerHTML = `
+    <header>
+      <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
+      <h1>🔔 תזכורות</h1>
+      <div class="date mono"></div>
+    </header>
+    ${open.length>0 ? renderTasksSection() : `<div class="empty" style="padding:30px 20px;"><span class="ic">🎉</span>אין תזכורות פתוחות כרגע.</div>`}
+    <button class="taskbtn" onclick="openTaskModal()"><span>⏰</span><span>הוספת תזכורת עם שעה</span></button>
+    ${(typeof Notification!=='undefined' && Notification.permission==='default' && tasks.some(t=>!t.done)) ? `
+    <button class="taskbtn" onclick="requestNotifyPermission()" style="border-color:var(--accent); color:var(--accent);"><span>🔔</span><span>הפעלת התראות לתזכורות</span></button>
+    ` : ''}
+  `;
+}
+function renderTasksSummaryBadge(){
+  const open = tasks.filter(t=>!t.done);
+  if(open.length===0) return '';
+  const overdueCount = open.filter(t=>t.deadline<=Date.now()).length;
+  return `<div class="workdaybar" style="cursor:pointer; box-shadow:0 0 16px rgba(244,180,0,.4); border-color:var(--accent);" onclick="openRemindersScreen()">
+    <span>🔔 ${open.length} תזכורות פתוחות${overdueCount>0 ? ` (${overdueCount} באיחור)` : ''}</span>
+    <span class="wdbtn">צפייה</span>
+  </div>`;
+}
+function renderTasksSection(){
+  const open = tasks.filter(t=>!t.done).sort((a,b)=>a.deadline-b.deadline);
+  if(open.length===0) return '';
+  const now = Date.now();
+  return `<div class="taskswrap">${open.map(t=>{
+    const msLeft = t.deadline - now;
+    const minsLeft = Math.round(msLeft/60000);
+    let cls = 'ok';
+    if(minsLeft<=0) cls='overdue';
+    else if(minsLeft<=30) cls='soon';
+    const timeStr = new Date(t.deadline).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'});
+    let label;
+    if(minsLeft<=0){
+      const daysLate = Math.floor(Math.abs(msLeft)/86400000);
+      label = daysLate<=0 ? 'באיחור - עבר היום' : (daysLate===1 ? 'באיחור של יום אחד' : `באיחור של ${daysLate} ימים`);
+    } else if(minsLeft<60){
+      label = `עוד ${minsLeft} דק'`;
+    } else {
+      label = `עד השעה ${timeStr}`;
+    }
+    return `
+      <div class="task ${cls}">
+        <div class="taskmid">
+          <div class="taskttl">${t.title}</div>
+          <div class="tasktime">${label} · ${timeStr}</div>
+        </div>
+        <button class="taskdone" onclick="toggleTaskDone('${t.id}')">✓</button>
+        <div class="taskdel" onclick="removeTask('${t.id}')">✕</div>
+      </div>`;
+  }).join('')}</div>`;
+}
+
+function durFmt(s){
+  const mm = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return mm+':'+ss;
+}
+
+function requestNotifyPermission(){
+  if(typeof Notification === 'undefined'){
+    alert('הדפדפן הזה לא תומך בהתראות מערכת.');
+    return;
+  }
+  Notification.requestPermission().then(perm=>{
+    if(perm==='granted'){
+      new Notification('התראות הופעלו ✅', { body: 'תקבל התראה כשמשלוח מתקרב לזמן היעד או עובר אותו.' });
+    }
+    render();
+  });
+}
+
+function checkTaskAlerts(){
+  if(typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const now = Date.now();
+  tasks.filter(t=>!t.done).forEach(t=>{
+    const minsLeft = Math.round((t.deadline - now) / 60000);
+    const daysLeft = Math.floor((t.deadline - now) / 86400000);
+    const day3Key = t.id+'-day3', day1Key = t.id+'-day1';
+    if(daysLeft === 3 && !notifiedTaskAlerts.has(day3Key)){
+      notifiedTaskAlerts.add(day3Key);
+      try{
+        new Notification('📅 עוד 3 ימים', { body: t.title });
+        if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      }catch(e){}
+    }
+    if(daysLeft === 1 && !notifiedTaskAlerts.has(day1Key)){
+      notifiedTaskAlerts.add(day1Key);
+      try{
+        new Notification('📅 מחר', { body: t.title });
+        if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      }catch(e){}
+    }
+    const hourKey = t.id+'-hour', soonKey = t.id+'-soon', overKey = t.id+'-over';
+    if(minsLeft <= 60 && minsLeft > 10 && !notifiedTaskAlerts.has(hourKey)){
+      notifiedTaskAlerts.add(hourKey);
+      try{
+        new Notification('⏰ שעה לפני זמן היעד', { body: `${t.title} - עוד כשעה` });
+        if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      }catch(e){}
+    }
+    if(minsLeft <= 10 && minsLeft > 0 && !notifiedTaskAlerts.has(soonKey)){
+      notifiedTaskAlerts.add(soonKey);
+      try{
+        new Notification('⏰ מתקרב זמן היעד', { body: `${t.title} - עוד ${minsLeft} דקות` });
+        if(navigator.vibrate) navigator.vibrate([200,100,200]);
+      }catch(e){}
+    }
+    if(minsLeft <= 0 && !notifiedTaskAlerts.has(overKey)){
+      notifiedTaskAlerts.add(overKey);
+      try{
+        new Notification('🚨 עבר זמן היעד!', { body: t.title, requireInteraction:true });
+        if(navigator.vibrate) navigator.vibrate([300,100,300,100,300]);
+      }catch(e){}
+    }
+  });
+}
+
+function renderVoiceSection(){
+  const open = voiceNotes.filter(v=>!v.reviewed).sort((a,b)=>b.ts-a.ts);
+  if(open.length===0) return '';
+  return `<div class="voicewrap">
+    <div class="voiceheader">🎙️ הודעות קוליות שממתינות (${open.length})</div>
+    ${open.map(v=>`
+      <div class="voicenote">
+        <audio controls preload="none" src="${v.base64}" style="flex:1; height:34px; min-width:0;"></audio>
+        <div class="voicemeta">
+          <div class="voicetag">${v.tag ? v.tag : timeLabel(v.ts)}</div>
+          <div class="voicetime">${durFmt(v.durationSec)}</div>
+        </div>
+        <button class="taskdone" onclick="markVoiceReviewed('${v.id}')">✓</button>
+        <div class="taskdel" onclick="removeVoiceNote('${v.id}')">✕</div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function goalMessageFor(pct){
+  if(pct <= 0) return 'יום עבודה טוב מתחיל ככה 🙂';
+  if(pct < 25) return 'התחלה נעימה - כל נסיעה מקרבת אותך';
+  if(pct < 50) return 'רבע מהדרך מאחוריך, קצב נעים';
+  if(pct < 75) return 'כבר באמצע הדרך 💪';
+  if(pct < 100) return 'עוד קצת ואתה שם';
+  return '🎉 הגעת ליעד היומי שקבעת - כל מה שמעבר זה בונוס';
+}
+
+function renderGoalCard(netTotal){
+  const dynamicTarget = computeDynamicDailyTarget();
+  const usingDynamic = dynamicTarget.hasObligations;
+  const effectiveGoal = usingDynamic ? dynamicTarget.perWorkDay : dailyGoal;
+
+  if(!usingDynamic && (dailyGoal === null || dailyGoal <= 0)){
+    return `<div class="goalcard nogoal" onclick="openGoalEdit()">🎯 הגדר יעד יומי אישי (לא חובה)</div>`;
+  }
+  const pct = effectiveGoal>0 ? Math.round((netTotal / effectiveGoal) * 100) : 0;
+  const barPct = Math.max(0, Math.min(100, pct));
+  const reached = netTotal >= effectiveGoal;
+  const dayKey = viewingWorkdayId || workdayStart;
+
+  if(reached && goalConfettiShownFor !== dayKey && typeof confetti === 'function'){
+    goalConfettiShownFor = dayKey;
+    setTimeout(()=>{
+      try{ confetti({ particleCount:120, spread:80, origin:{ y:0.6 }, colors:['#F4B400','#3FB27F','#4FD1C5'] }); }catch(e){}
+    }, 150);
+  }
+
+  return `<div class="goalcard">
+    <div class="goalhead">
+      <div class="goallabel">יעד יומי${usingDynamic ? ' <span style="opacity:.6; font-weight:400;">(מסונכרן עם עמוד החובות)</span>' : ''}</div>
+      <div class="goalnums" ${usingDynamic ? 'onclick="openDebtsScreen()"' : 'onclick="openGoalEdit()"'}>₪${netTotal.toLocaleString('he-IL',{maximumFractionDigits:0})} <b>/ ₪${effectiveGoal.toLocaleString('he-IL',{maximumFractionDigits:0})}</b> ${usingDynamic ? '💳' : '✏️'}</div>
+    </div>
+    <div class="goalbar"><div class="goalbarfill ${reached?'done':''}" style="width:${barPct}%"></div></div>
+    <div class="goalmsg ${reached?'done':''}">${goalMessageFor(pct)}</div>
+  </div>`;
+}
+
+function openGoalEdit(){
+  draft = null; editTargetId = null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>🎯 יעד יומי אישי</h2>
+    <input id="goalAmount" class="goalinput" type="number" inputmode="numeric" placeholder="לדוגמה: 1000" value="${dailyGoal||''}">
+    <div style="font-size:12px; color:var(--muted); margin:-8px 0 16px; text-align:center;">
+      זה רק בשבילך - כלי אישי לראות התקדמות, לא תחרות עם אף אחד.
+    </div>
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitGoal()">💾 שמירה</button>
+    </div>
+    ${dailyGoal ? `<div class="cancel" onclick="clearGoal()">🗑️ ביטול היעד</div>` : `<div class="cancel" onclick="closeSheet()">ביטול</div>`}
+  `;
+}
+function submitGoal(){
+  const val = parseFloat(document.getElementById('goalAmount').value || '0');
+  if(!val || val<=0){ return; }
+  dailyGoal = val;
+  goalConfettiShownFor = null;
+  saveDailyGoal();
+  closeSheet();
+  render();
+}
+function clearGoal(){
+  dailyGoal = null;
+  saveDailyGoal();
+  closeSheet();
+  render();
+}
+
+function markVoiceReviewed(id){
+  const v = voiceNotes.find(x=>x.id===id);
+  if(v){ v.reviewed = true; saveVoiceNotes(); render(); }
+}
+function removeVoiceNote(id){
+  voiceNotes = voiceNotes.filter(x=>x.id!==id);
+  saveVoiceNotes(); render();
+}
+
+// ---- Debt management ----
+const WEEKDAY_LABELS = ['ראשון','שני','שלישי','רביעי','חמישי','שישי','שבת'];
+
+function dateKey(d){
+  const pad = n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function isWorkingOn(d){
+  const key = dateKey(d);
+  const exc = workExceptions.find(x=>x.date===key);
+  if(exc) return exc.working;
+  return workDaysPattern[d.getDay()];
+}
+function totalNetEarnedThisMonth(){
+  const now = new Date();
+  return entries.filter(e=>{
+    const ed = new Date(e.ts);
+    return ed.getFullYear()===now.getFullYear() && ed.getMonth()===now.getMonth();
+  }).reduce((s,e)=> s + netOf(e), 0);
+}
+function countRemainingWorkDaysInMonth(){
+  const now = new Date();
+  const year = now.getFullYear(), month = now.getMonth();
+  const lastDay = new Date(year, month+1, 0).getDate();
+  let count = 0;
+  for(let day = now.getDate(); day <= lastDay; day++){
+    if(isWorkingOn(new Date(year, month, day))) count++;
+  }
+  return count;
+}
+function computeDynamicDailyTarget(){
+  // single source of truth for "how much do I still need to bring today" - used identically by
+  // both the main screen goal card and the debts screen, so the two numbers can never drift apart
+  const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && !d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
+  const recurringTotal = totalRecurringMonthly();
+  const combinedMonthlyTotal = monthlyDebtTarget + recurringTotal;
+  const earnedThisMonth = totalNetEarnedThisMonth();
+  const stillNeeded = Math.max(0, combinedMonthlyTotal - earnedThisMonth);
+  const remainingWorkDays = countRemainingWorkDaysInMonth();
+  const perWorkDay = remainingWorkDays>0 ? Math.ceil(stillNeeded/remainingWorkDays) : 0;
+  return { monthlyDebtTarget, recurringTotal, combinedMonthlyTotal, earnedThisMonth, stillNeeded, remainingWorkDays, perWorkDay, hasObligations: combinedMonthlyTotal>0 };
+}
+
+function openWorkDaysSettings(){
+  document.getElementById('overlay').classList.add('open');
+  renderWorkDaysSettingsSheet();
+}
+function renderWorkDaysSettingsSheet(){
+  const sheet = document.getElementById('sheet');
+  const upcomingExceptions = [...workExceptions].filter(x=> new Date(x.date+'T23:59') >= new Date(new Date().toDateString())).sort((a,b)=>a.date.localeCompare(b.date));
+  sheet.innerHTML = `
+    <h2>⚙️ ימי עבודה</h2>
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin-bottom:10px;">
+      התבנית הקבועה שלך בשבוע:
+    </div>
+    <div class="commquick" style="flex-wrap:wrap;">
+      ${WEEKDAY_LABELS.map((label,i)=>`
+        <div class="qchip ${workDaysPattern[i]?'on':''}" style="flex:0 0 30%; margin-bottom:8px;" onclick="toggleWorkDay(${i})">${label}</div>
+      `).join('')}
+    </div>
+
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:14px 0 8px;">
+      יש יום ספציפי שהוא חריג? (למשל "השישי הזה לא עובד")
+    </div>
+    <div class="deadlinerow" style="margin-bottom:8px;">
+      <input id="exceptionDate" class="contactinput" style="width:100%;" type="date">
+    </div>
+    <div class="commquick">
+      <div class="qchip" id="excWorkingChip" onclick="setExceptionWorking(true)">כן עובד</div>
+      <div class="qchip on" id="excOffChip" onclick="setExceptionWorking(false)">לא עובד</div>
+    </div>
+    <div class="saverow" style="margin-top:10px;">
+      <button class="savebtn single" onclick="submitWorkException()">💾 שמירת חריג</button>
+    </div>
+
+    ${upcomingExceptions.length>0 ? `
+      <div style="font-size:11.5px; color:var(--muted); margin:16px 0 8px;">חריגים קרובים:</div>
+      ${upcomingExceptions.map(x=>`
+        <div class="task ok" style="margin-bottom:8px;">
+          <div class="taskmid">
+            <div class="taskttl">${new Date(x.date).toLocaleDateString('he-IL',{weekday:'long', day:'2-digit', month:'2-digit'})}</div>
+            <div class="tasktime">${x.working ? 'כן עובד (חריג)' : 'לא עובד (חריג)'}</div>
+          </div>
+          <div class="taskdel" onclick="removeWorkException('${x.date}')">✕</div>
+        </div>
+      `).join('')}
+    ` : ''}
+
+    <div class="cancel" onclick="closeSheet()">סגירה</div>
+  `;
+}
+let pendingExceptionWorking = false;
+function setExceptionWorking(val){
+  pendingExceptionWorking = val;
+  const workingChip = document.getElementById('excWorkingChip');
+  const offChip = document.getElementById('excOffChip');
+  if(workingChip) workingChip.classList.toggle('on', val);
+  if(offChip) offChip.classList.toggle('on', !val);
+}
+function submitWorkException(){
+  const dateVal = document.getElementById('exceptionDate').value;
+  if(!dateVal) return;
+  workExceptions = workExceptions.filter(x=>x.date!==dateVal);
+  workExceptions.push({ date: dateVal, working: pendingExceptionWorking });
+  saveWorkExceptions();
+  pendingExceptionWorking = false;
+  renderWorkDaysSettingsSheet();
+}
+function removeWorkException(date){
+  workExceptions = workExceptions.filter(x=>x.date!==date);
+  saveWorkExceptions();
+  renderWorkDaysSettingsSheet();
+}
+function toggleWorkDay(i){
+  workDaysPattern[i] = !workDaysPattern[i];
+  saveWorkDaysPattern();
+  renderWorkDaysSettingsSheet();
+}
+
+function escHtml(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function celebrateConfetti(){
+  if(typeof confetti === 'function'){
+    try{ confetti({ particleCount:150, spread:90, origin:{ y:0.6 }, colors:['#F4B400','#3FB27F','#4FD1C5'] }); }catch(e){}
+  }
+}
+function debtPaidAmount(debtId){
+  return debtPayments.filter(p=>p.debtId===debtId).reduce((s,p)=>s+p.amount, 0);
+}
+function debtRemaining(debt){
+  return Math.max(0, debt.totalOwed - debtPaidAmount(debt.id));
+}
+function totalDebtRemaining(){
+  return debts.reduce((s,d)=>s+debtRemaining(d), 0);
+}
+function totalDebtPaidAllTime(){
+  return debtPayments.reduce((s,p)=>s+p.amount, 0);
+}
+function createdAfterDueDayPassedThisMonth(item){
+  // if you're adding a debt/recurring charge with a due-day that's already passed this month
+  // (e.g. you're re-entering everything on the 23rd with a due-day of 15), don't immediately
+  // flag it as overdue - start tracking from the next cycle instead
+  if(!item.createdTs || !item.dueDay) return false;
+  const created = new Date(item.createdTs);
+  const now = new Date();
+  if(created.getFullYear()!==now.getFullYear() || created.getMonth()!==now.getMonth()) return false;
+  return created.getDate() > item.dueDay;
+}
+function debtPaidThisMonthAmount(debtId){
+  const now = new Date();
+  return debtPayments.filter(p=>{
+    if(p.debtId!==debtId) return false;
+    const pd = new Date(p.ts);
+    return pd.getFullYear()===now.getFullYear() && pd.getMonth()===now.getMonth();
+  }).reduce((s,p)=>s+p.amount, 0);
+}
+function debtMonthMarkedPaid(d){
+  const ym = currentYm();
+  return !!(d.paidMonths && d.paidMonths[ym]);
+}
+function markDebtMonthPaidNoBalanceChange(id){
+  const d = debts.find(x=>x.id===id);
+  if(!d) return;
+  const ym = currentYm();
+  if(!d.paidMonths) d.paidMonths = {};
+  d.paidMonths[ym] = !d.paidMonths[ym]; // toggle - lets you undo by mistake too
+  saveDebts();
+  render();
+}
+function totalRecurringMonthly(){
+  return recurringCharges.filter(r=>r.installmentsLeft!==0 && !r.coveredByExtraIncome).reduce((s,r)=>s+r.amount, 0);
+}
+function currentYm(){
+  const n = new Date();
+  return `${n.getFullYear()}-${n.getMonth()+1}`;
+}
+function extraIncomeStatusFor(item){
+  const ym = currentYm();
+  return (item.monthly && item.monthly[ym]) ? item.monthly[ym] : { status:'pending', amount:null };
+}
+function extraIncomeAmountForMonth(item){
+  const st = extraIncomeStatusFor(item);
+  if(st.status==='postponed') return 0;
+  if(st.status==='received') return (st.amount!=null ? st.amount : item.estimate);
+  return item.estimate; // pending - conservative estimate assumed until told otherwise
+}
+function totalExtraIncomeThisMonth(){
+  return extraIncomes.reduce((s,item)=> s + extraIncomeAmountForMonth(item), 0);
+}
+function markExtraIncomePostponed(id){
+  const item = extraIncomes.find(x=>x.id===id);
+  if(!item) return;
+  item.monthly = item.monthly || {};
+  item.monthly[currentYm()] = { status:'postponed', amount:null };
+  saveExtraIncomes();
+  render();
+}
+function markExtraIncomePending(id){
+  const item = extraIncomes.find(x=>x.id===id);
+  if(!item) return;
+  item.monthly = item.monthly || {};
+  delete item.monthly[currentYm()];
+  saveExtraIncomes();
+  render();
+}
+let extraIncomeEditTargetId = null;
+function openExtraIncomeReceivedSheet(id){
+  const item = extraIncomes.find(x=>x.id===id);
+  if(!item) return;
+  extraIncomeEditTargetId = id;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  const st = extraIncomeStatusFor(item);
+  sheet.innerHTML = `
+    <h2>💎 סימון כהתקבל: ${escHtml(item.name)}</h2>
+    <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:10px;">כמה בדיוק קיבלת החודש?</div>
+    <input id="extraIncomeAmount" class="goalinput" type="number" inputmode="decimal" placeholder="סכום בפועל" value="${st.amount!=null ? st.amount : item.estimate}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitExtraIncomeReceived()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitExtraIncomeReceived(){
+  const amount = parseFloat(document.getElementById('extraIncomeAmount').value || '0');
+  if(!amount || amount<=0) return;
+  const item = extraIncomes.find(x=>x.id===extraIncomeEditTargetId);
+  if(item){
+    item.monthly = item.monthly || {};
+    item.monthly[currentYm()] = { status:'received', amount };
+    saveExtraIncomes();
+  }
+  extraIncomeEditTargetId = null;
+  closeSheet();
+  render();
+}
+function openExtraIncomeSheet(id){
+  extraIncomeEditTargetId = id || null;
+  const item = id ? extraIncomes.find(x=>x.id===id) : null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>💎 ${item ? 'עריכת הכנסה נוספת' : 'הוספת הכנסה נוספת'}</h2>
+    <input id="eiName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם המקור (למשל: עמלת רב-קו)" value="${item ? escHtml(item.name) : ''}">
+    <input id="eiEstimate" class="goalinput" type="number" inputmode="decimal" placeholder="הערכה שמרנית לחודש (המינימום שכמעט בטוח יגיע)" value="${item ? item.estimate : ''}">
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:2px 0 10px;">באיזה יום בחודש זה בדרך כלל מגיע? (לא חובה)</div>
+    <input id="eiDueDay" class="contactinput" style="width:100%; margin-bottom:10px;" type="number" min="1" max="31" inputmode="numeric" placeholder="למשל 20" value="${item && item.dueDay ? item.dueDay : ''}">
+    <div class="fieldlabel">הערה (לא חובה)</div>
+    <textarea id="eiNote" class="noteinput" placeholder="למשל: תלוי שאני מספיק להביא חשבונית">${item && item.note ? escHtml(item.note) : ''}</textarea>
+    <div class="saverow" style="margin-top:4px;">
+      <button class="savebtn single" onclick="submitExtraIncome()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitExtraIncome(){
+  const name = (document.getElementById('eiName').value || '').trim();
+  const estimate = parseFloat(document.getElementById('eiEstimate').value || '0');
+  const dueDayVal = parseInt(document.getElementById('eiDueDay').value || '0', 10);
+  const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
+  const note = (document.getElementById('eiNote').value || '').trim();
+  if(!name || !estimate || estimate<=0) return;
+  if(extraIncomeEditTargetId){
+    const item = extraIncomes.find(x=>x.id===extraIncomeEditTargetId);
+    if(item){ item.name = name; item.estimate = estimate; item.dueDay = dueDay; item.note = note; }
+  } else {
+    extraIncomes.push({ id:'ei'+Date.now()+Math.random().toString(36).slice(2,7), name, estimate, dueDay, note, monthly:{}, createdTs:Date.now() });
+  }
+  saveExtraIncomes();
+  extraIncomeEditTargetId = null;
+  closeSheet();
+  render();
+}
+function deleteExtraIncome(id){
+  if(!confirm('למחוק את מקור ההכנסה הזה?')) return;
+  extraIncomes = extraIncomes.filter(x=>x.id!==id);
+  saveExtraIncomes();
+  render();
+}
+function markRecurringPaid(id){
+  const r = recurringCharges.find(x=>x.id===id);
+  if(!r || r.installmentsLeft==null) return;
+  r.installmentsLeft = Math.max(0, r.installmentsLeft - 1);
+  saveRecurring();
+  render();
+  if(r.installmentsLeft===0) celebrateConfetti();
+}
+
+function renderDebtEntryPoint(){
+  const remaining = totalDebtRemaining();
+  const recurringTotal = totalRecurringMonthly();
+  if(debts.length===0 && recurringCharges.length===0){
+    return `<div class="workdaybar" style="cursor:pointer;" onclick="openDebtsScreen()">
+      <span>💳 חובות והוצאות קבועות</span>
+      <span class="wdbtn">פתיחה</span>
+    </div>`;
+  }
+  return `<div class="workdaybar" style="cursor:pointer;" onclick="openDebtsScreen()">
+    <span>💳 חוב: <b style="color:var(--unpaid); font-family:'Roboto Mono',monospace;">${fmt(remaining)}</b>${recurringTotal>0 ? ` · קבוע: <b style="color:var(--muted); font-family:'Roboto Mono',monospace;">${fmt(recurringTotal)}</b>/חודש` : ''}</span>
+    <span class="wdbtn">ניהול</span>
+  </div>`;
+}
+
+function countWorkDaysInFullMonth(year, month){
+  const lastDay = new Date(year, month+1, 0).getDate();
+  let count = 0;
+  for(let day = 1; day <= lastDay; day++){
+    if(isWorkingOn(new Date(year, month, day))) count++;
+  }
+  return count;
+}
+function nextOccurrenceDaysAway(dueDay, today, daysInMonth){
+  if(dueDay >= today) return dueDay - today;
+  return (daysInMonth - today) + dueDay;
+}
+function findNearestUpcomingCharge(){
+  const now = new Date();
+  const today = now.getDate();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+  const candidates = [];
+  debts.filter(d=>debtRemaining(d)>0 && d.dueDay && d.monthlyAgreed).forEach(d=>{
+    candidates.push({ name:d.creditorName, amount:d.monthlyAgreed, daysAway: nextOccurrenceDaysAway(d.dueDay, today, daysInMonth), icon:'🤝' });
+  });
+  recurringCharges.filter(r=>r.dueDay && r.installmentsLeft!==0).forEach(r=>{
+    candidates.push({ name:r.name, amount:r.amount, daysAway: nextOccurrenceDaysAway(r.dueDay, today, daysInMonth), icon:'📌' });
+  });
+  if(candidates.length===0) return null;
+  candidates.sort((a,b)=>a.daysAway-b.daysAway);
+  return candidates[0];
+}
+
+function openDebtsScreen(){
+  currentScreen = 'debts';
+  render();
+}
+function openAIScreen(){
+  currentScreen = 'ai';
+  render();
+}
+function backToMain(){
+  currentScreen = 'main';
+  render();
+}
+
+let aiChatHistory = []; // [{role:'user'|'assistant', text:'...'}] - session only, not persisted
+let aiIsThinking = false;
+
+function renderAIScreen(){
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <header>
+      <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
+      <h1>🤖 שאל את המונה שלי</h1>
+      <div class="date mono"></div>
+    </header>
+    <div style="font-size:11.5px; color:var(--muted); margin:0 18px 14px; line-height:1.6;">
+      שאל שאלות על החובות, ההוצאות הקבועות, והתנועות מהאשראי שלך - למשל "כמה אני משלם בבזק?" או "מה החוב הכי גדול שלי?". התשובות מבוססות רק על מה שרשום באפליקציה.
+    </div>
+    <div id="aiChatArea" style="margin:0 18px 12px; display:flex; flex-direction:column; gap:10px;">
+      ${aiChatHistory.length===0 ? `<div class="empty" style="padding:24px 20px;"><span class="ic">🤖</span>עדיין לא שאלת כלום. תתחיל לשאול!</div>` : aiChatHistory.map(m=>`
+        <div style="align-self:${m.role==='user'?'flex-end':'flex-start'}; max-width:85%; background:${m.role==='user'?'var(--accent-dim)':'var(--surface2)'}; color:${m.role==='user'?'var(--accent)':'var(--text)'}; padding:10px 14px; border-radius:14px; font-size:13px; line-height:1.6; white-space:pre-wrap;">${escHtml(m.text)}</div>
+      `).join('')}
+      ${aiIsThinking ? `<div style="align-self:flex-start; background:var(--surface2); padding:10px 14px; border-radius:14px; font-size:13px; color:var(--muted);">חושב...</div>` : ''}
+    </div>
+    <div style="position:sticky; bottom:0; background:var(--bg); padding:10px 18px 18px; display:flex; gap:8px;">
+      <input id="aiQuestionInput" class="contactinput" style="flex:1;" type="text" placeholder="מה תרצה לדעת?" onkeydown="if(event.key==='Enter') submitAIQuestion();">
+      <button class="fuelbtn" style="flex-shrink:0; padding:12px 18px;" onclick="submitAIQuestion()">➤</button>
+    </div>
+  `;
+  const chatArea = document.getElementById('aiChatArea');
+  if(chatArea) chatArea.scrollIntoView({block:'end'});
+}
+
+async function submitAIQuestion(){
+  if(aiIsThinking) return;
+  const input = document.getElementById('aiQuestionInput');
+  const question = (input.value || '').trim();
+  if(!question) return;
+  input.value = '';
+  aiChatHistory.push({ role:'user', text: question });
+  aiIsThinking = true;
+  render();
+
+  try{
+    const context = {
+      today: new Date().toLocaleDateString('he-IL'),
+      debts: debts.map(d=>({
+        שם: d.creditorName, סהכ_חוב: d.totalOwed, נותר: debtRemaining(d),
+        תשלום_חודשי_מוסכם: d.monthlyAgreed||null, יום_תשלום_בחודש: d.dueDay||null,
+        מכוסה_מהכנסה_נוספת: !!d.coveredByExtraIncome, הערה: d.note||null
+      })),
+      חיובים_קבועים: recurringCharges.map(r=>({
+        שם: r.name, סכום_חודשי: r.amount, יום_חיוב: r.dueDay||null,
+        יורד_אוטומטית: !!r.isAutomatic, מכוסה_מהכנסה_נוספת: !!r.coveredByExtraIncome,
+        תשלומים_שנותרו: r.installmentsLeft!=null ? r.installmentsLeft : null
+      })),
+    };
+    const systemPrompt = `אתה עוזר פיננסי בתוך אפליקציית ניהול הכנסות והוצאות של נהג בישראל, בשם "המונה שלי". ענה בעברית, בקצרה ובבירור (2-4 משפטים בדרך כלל), אך ורק על סמך הנתונים הבאים בפורמט JSON. אם המידע לא מספיק כדי לענות, תגיד את זה בפירוש ואל תמציא מספרים.\n\nנתונים:\n${JSON.stringify(context)}`;
+
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 500,
+        system: systemPrompt,
+        messages: [{ role: "user", content: question }]
+      })
+    });
+    const data = await response.json();
+    const answerText = (data.content || []).map(b => b.text || '').join('\n').trim() || 'לא הצלחתי להבין, נסה לנסח אחרת.';
+    aiChatHistory.push({ role:'assistant', text: answerText });
+  }catch(e){
+    console.error('AI question failed', e);
+    aiChatHistory.push({ role:'assistant', text: 'משהו השתבש בשליחת השאלה. נסה שוב בעוד רגע.' });
+  }
+  aiIsThinking = false;
+  render();
+}
+
+function renderDebtsScreen(){
+  const app = document.getElementById('app');
+  const totalRemaining = totalDebtRemaining();
+  const totalOwedOriginal = debts.reduce((s,d)=>s+d.totalOwed, 0);
+  const totalPaid = totalDebtPaidAllTime();
+  const overallPct = totalOwedOriginal>0 ? Math.min(100, Math.round((totalPaid/totalOwedOriginal)*100)) : 0;
+  const sorted = [...debts].sort((a,b)=> debtRemaining(b) - debtRemaining(a));
+  const sortedRecurring = [...recurringCharges].sort((a,b)=> (a.dueDay||99) - (b.dueDay||99));
+  const sortedExtraIncomes = [...extraIncomes].sort((a,b)=> (a.dueDay||99) - (b.dueDay||99));
+  const now = new Date();
+
+  // Dynamic catch-up daily target: compares total fixed obligations for the month against what
+  // you've actually earned so far this month. If a day falls short, the shortfall automatically
+  // raises the required amount for the remaining days - no manual tracking needed.
+  const dynamicTarget = computeDynamicDailyTarget();
+  const monthlyDebtTarget = dynamicTarget.monthlyDebtTarget;
+  const recurringTotal = dynamicTarget.recurringTotal;
+  const combinedMonthlyTotal = dynamicTarget.combinedMonthlyTotal;
+  const earnedThisMonth = dynamicTarget.earnedThisMonth;
+  const stillNeeded = dynamicTarget.stillNeeded;
+  const coveredDebtsTotal = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
+  const coveredRecurringTotal = recurringCharges.filter(r=>r.installmentsLeft!==0 && r.coveredByExtraIncome).reduce((s,r)=>s+r.amount, 0);
+  const coveredTotal = coveredDebtsTotal + coveredRecurringTotal;
+  const upcomingObligations = getUpcomingObligations(14);
+  const hasConfirmedIncomeThisMonth = extraIncomes.some(i=>extraIncomeStatusFor(i).status==='received');
+  const remainingWorkDays = dynamicTarget.remainingWorkDays;
+  const perWorkDay = dynamicTarget.perWorkDay;
+  const nearestCharge = findNearestUpcomingCharge();
+  const todayDate = now.getDate();
+
+  app.innerHTML = `
+    <header>
+      <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
+      <h1>💳 חובות והוצאות קבועות</h1>
+      <div class="date mono"></div>
+    </header>
+
+    <div class="wdbtn" style="display:inline-block; margin:0 18px 14px; cursor:pointer; color:var(--unpaid); border-color:#5a3a26;" onclick="fullResetDebtsPage()">🗑️ איפוס מלא של העמוד - התחלה מחדש</div>
+
+    <div class="meter">
+      <div class="label">סה"כ חוב שנותר</div>
+      <div class="amount"><span>₪</span>${totalRemaining.toLocaleString('he-IL',{maximumFractionDigits:0})}</div>
+      <div class="sub">
+        <span>שולם עד כה: <b>${fmt(totalPaid)}</b></span>
+        <span>מתוך: <b>${fmt(totalOwedOriginal)}</b></span>
+      </div>
+    </div>
+
+    ${combinedMonthlyTotal>0 ? `
+    <div class="targetcard">
+      <div class="targetlabel">💪 כמה עוד צריך להביא היום</div>
+      <div class="targetamt"><span>₪</span>${perWorkDay.toLocaleString('he-IL')}</div>
+      <div class="targetsub">
+        <span>מתעדכן אוטומטית - אם לא משיגים את הסכום, המחר יעלה בהתאם</span>
+      </div>
+      ${nearestCharge ? `
+      <div class="targetbreakrow" style="margin-top:12px; padding-top:12px; border-top:1px solid #33372a;">
+        <span>🔜 הקרוב ביותר: ${nearestCharge.icon} ${escHtml(nearestCharge.name)}</span>
+        <b>${fmt(nearestCharge.amount)} · ${nearestCharge.daysAway===0 ? 'היום!' : (nearestCharge.daysAway===1 ? 'מחר' : `בעוד ${nearestCharge.daysAway} ימים`)}</b>
+      </div>` : ''}
+      <div class="targetbreak">
+        ${monthlyDebtTarget>0 ? `<div class="targetbreakrow"><span>🤝 סה"כ החזרי חובות לחודש</span><b>${fmt(monthlyDebtTarget)}</b></div>` : ''}
+        ${recurringTotal>0 ? `<div class="targetbreakrow"><span>📌 סה"כ הוצאות קבועות לחודש</span><b>${fmt(recurringTotal)}</b></div>` : ''}
+        <div class="targetbreakrow"><span>💵 הרווחת החודש</span><b>${fmt(earnedThisMonth)}</b></div>
+        <div class="targetbreakrow"><span>📆 ימי עבודה שנשארו החודש</span><b>${remainingWorkDays}</b></div>
+      </div>
+    </div>
+    ${coveredTotal>0 ? `
+    <div class="targetcard" style="background:linear-gradient(145deg,#1a2024,#1b1d22); border-color:#2c3a3d; margin-top:12px;">
+      <div class="targetlabel">🏦 מכוסה מהכנסה נוספת (לא בלחץ היומי)</div>
+      <div class="targetamt" style="color:var(--muted); font-size:26px;"><span>₪</span>${coveredTotal.toLocaleString('he-IL')}<span style="font-size:13px;">/חודש</span></div>
+      <div class="targetsub">
+        <span>ההתחייבויות האלה משולמות מהעמלה, לא מהנסיעות - גם אם היא מתעכבת</span>
+      </div>
+    </div>` : ''}
+    <div class="wdbtn" style="display:inline-block; margin:8px 18px 0; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>
+    ` : (debts.length>0 || recurringCharges.length>0 ? `<div class="wdbtn" style="display:inline-block; margin:10px 18px 6px; cursor:pointer;" onclick="openWorkDaysSettings()">⚙️ עריכת ימי העבודה שלי בשבוע</div>` : '')}
+
+    ${upcomingObligations.length>0 ? `
+    <div class="dsection">
+      <h3>🔭 מה יורד בקרוב (14 הימים הקרובים)</h3>
+    </div>
+    ${upcomingObligations.some(o=>o.coveredByExtraIncome && !hasConfirmedIncomeThisMonth && o.daysAway<=7) ? `
+    <div style="margin:0 18px 10px; padding:10px 14px; background:var(--unpaid-dim); border-radius:12px; font-size:11.5px; color:var(--unpaid); line-height:1.6;">
+      ⚠️ כמה מהחיובים למטה אמורים להיות מכוסים מהכנסה נוספת שעדיין לא אושרה החודש - ודא שיש לך מאיפה.
+    </div>` : ''}
+    <div class="listwrap" style="margin-top:0;">
+      ${upcomingObligations.map(o=>{
+        const urgent = o.daysAway<=0;
+        const whenLabel = o.daysAway<=0 ? 'היום' : (o.daysAway===1 ? 'מחר' : `בעוד ${o.daysAway} ימים`);
+        return `
+        <div class="task ${urgent?'overdue':'ok'}" style="margin-bottom:8px;">
+          <div class="taskmid" style="width:100%;">
+            <div class="taskttl" style="font-size:13px;">${o.icon} ${escHtml(o.name)}</div>
+            <div class="tasktime">${fmt(o.amount)} · ${whenLabel}${o.type==='cardbilling' ? ' · סה"כ בכרטיסים' : (o.coveredByExtraIncome ? ' · 🏦 מהכנסה נוספת' : ' · 🚗 מנסיעות')}</div>
+          </div>
+        </div>
+      `;
+      }).join('')}
+    </div>
+    ` : ''}
+
+    ${debts.length>0 ? `
+    <div class="goalcard">
+      <div class="goalhead"><div class="goallabel">התקדמות כוללת בהחזר החוב</div><div class="goalnums">${overallPct}%</div></div>
+      <div class="goalbar"><div class="goalbarfill ${overallPct>=100?'done':''}" style="width:${overallPct}%"></div></div>
+    </div>
+    ${renderDebtChart()}
+    ` : ''}
+
+    <div class="dsection">
+      <h3>🤝 בעלי חוב</h3>
+      ${debts.length>0 ? `<span class="dcount">${debts.length}</span>` : ''}
+    </div>
+
+    <div class="listwrap" style="margin-top:0;">
+      ${sorted.length===0 ? `
+        <div class="addcard" onclick="openDebtSheet()"><span>➕</span> הוספת בעל חוב</div>
+        <div class="empty" style="padding:20px 20px 6px;">
+          <span class="ic">💳</span>
+          עדיין לא הוספת בעלי חוב.
+        </div>` : `
+        <div class="addcard" onclick="openDebtSheet()"><span>➕</span> הוספת בעל חוב</div>
+        ${sorted.map(d=>{
+          const remaining = debtRemaining(d);
+          const paid = debtPaidAmount(d.id);
+          const pct = d.totalOwed>0 ? Math.min(100, Math.round((paid/d.totalOwed)*100)) : 0;
+          const isDone = remaining<=0;
+          const paidThisMonthForD = debtPaidThisMonthAmount(d.id);
+          const isOverdue = !isDone && d.dueDay && todayDate > d.dueDay && paidThisMonthForD < (d.monthlyAgreed||0) && !createdAfterDueDayPassedThisMonth(d);
+          const isPaidThisMonth = !isDone && d.dueDay && d.monthlyAgreed && (paidThisMonthForD >= d.monthlyAgreed || debtMonthMarkedPaid(d));
+          const initial = (d.creditorName||'?').trim().charAt(0).toUpperCase();
+          return `
+          <div class="dcard ${isOverdue?'dueflag':''} ${isDone?'done':''}">
+            <div class="dcardtop">
+              <div class="davatar ${isDone?'done':''}">${isDone?'✅':initial}</div>
+              <div class="dcardhead">
+                <div class="dname">${escHtml(d.creditorName)}</div>
+                <div class="dsub">נותר ${fmt(remaining)} מתוך ${fmt(d.totalOwed)}</div>
+              </div>
+              <div class="dpct ${isDone?'done':''}">${pct}%</div>
+            </div>
+            <div class="dbar"><div class="dbarfill ${isDone?'done':''}" style="width:${pct}%"></div></div>
+            ${!isDone ? `
+            <div class="dchips">
+              ${d.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : `<div class="dchip" style="background:var(--accent-dim); color:var(--accent);">🚗 מנסיעות</div>`}
+              ${d.monthlyAgreed ? `<div class="dchip">🤝 ${fmt(d.monthlyAgreed)}/חודש · כ-${Math.ceil(remaining/d.monthlyAgreed)} חודשים נותרו</div>` : ''}
+              ${d.dueDay ? (isOverdue
+                  ? `<div class="dchip overdue">⚠️ עבר יום ${d.dueDay} - עדיין לא שולם החודש</div>`
+                  : (isPaidThisMonth
+                      ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ שולם החודש</div>`
+                      : `<div class="dchip due">📅 תשלום ביום ${d.dueDay} לחודש</div>`)
+                ) : ''}
+            </div>` : ''}
+            ${d.note ? `<div class="dnote"><span class="ic">📝</span><span>${escHtml(d.note)}</span></div>` : ''}
+            <div class="dactions">
+              ${!isDone ? `<button class="fuelbtn" onclick="openPaymentSheet('${d.id}')">💰 רישום תשלום</button>` : ''}
+              ${(!isDone && d.dueDay && d.monthlyAgreed) ? `<button class="fuelbtn" onclick="markDebtMonthPaidNoBalanceChange('${d.id}')" title="מסמן שהחודש טופל בלי לשנות את היתרה - שימושי אם כבר הזנת יתרה עדכנית">${isPaidThisMonth ? '↩️ ביטול הסימון' : '✔️ שולם - בלי לשנות סכום'}</button>` : ''}
+              <button class="fuelbtn" onclick="openDebtSheet('${d.id}')">✏️ עריכה</button>
+              <button class="fuelbtn" onclick="deleteDebt('${d.id}')">🗑️</button>
+            </div>
+          </div>
+        `;
+        }).join('')}`}
+    </div>
+
+    <div class="dsection">
+      <h3>📌 חיובים קבועים</h3>
+      ${recurringCharges.length>0 ? `<span class="dcount">${fmt(recurringTotal)}/חודש</span>` : ''}
+    </div>
+    <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+      הוצאות שחוזרות כל חודש (ביטוח, שכירות רכב, טלפון וכו') - לא חוב, אלא סכום קבוע שכדאי לדעת שצריך להביא.
+    </div>
+
+    <div class="listwrap" style="margin-top:0;">
+      <div class="addcard" onclick="openRecurringSheet()"><span>➕</span> הוספת חיוב קבוע</div>
+      ${sortedRecurring.length===0 ? '' : sortedRecurring.map(r=>{
+        const isPastDue = r.dueDay && todayDate > r.dueDay && !createdAfterDueDayPassedThisMonth(r);
+        const isFinished = r.installmentsLeft === 0;
+        return `
+        <div class="dcard ${isFinished?'done':''}">
+          <div class="dcardtop">
+            <div class="davatar ${isFinished?'done':''}">${isFinished?'✅':'📌'}</div>
+            <div class="dcardhead">
+              <div class="dname">${escHtml(r.name)}</div>
+              <div class="dsub">${fmt(r.amount)} לחודש</div>
+            </div>
+          </div>
+          ${!isFinished ? `
+          <div class="dchips">
+            ${r.coveredByExtraIncome ? `<div class="dchip" style="background:#1a2024; color:#8fa8ad;">🏦 מכוסה מהכנסה נוספת</div>` : `<div class="dchip" style="background:var(--accent-dim); color:var(--accent);">🚗 מנסיעות</div>`}
+            ${r.isAutomatic ? `<div class="dchip">🔁 יורד אוטומטית${r.dueDay ? ` ביום ${r.dueDay} לחודש` : ''}</div>` : ''}
+            ${(!r.isAutomatic && r.dueDay) ? `<div class="dchip ${isPastDue?'':'due'}">📅 יורד ביום ${r.dueDay} לחודש</div>` : ''}
+            ${r.installmentsLeft!=null ? `<div class="dchip">🔢 נשארו ${r.installmentsLeft} תשלומים</div>` : ''}
+          </div>` : `
+          <div class="dchips">
+            <div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ העסקה הסתיימה</div>
+          </div>`}
+          ${r.note ? `<div class="dnote"><span class="ic">📝</span><span>${escHtml(r.note)}</span></div>` : ''}
+          <div class="dactions">
+            ${(r.installmentsLeft!=null && !isFinished) ? `<button class="fuelbtn" onclick="markRecurringPaid('${r.id}')">✔️ סימון כשולם החודש</button>` : ''}
+            <button class="fuelbtn" onclick="openRecurringSheet('${r.id}')">✏️ עריכה</button>
+            <button class="fuelbtn" onclick="deleteRecurring('${r.id}')">🗑️</button>
+          </div>
+        </div>
+      `;
+      }).join('')}
+    </div>
+
+    <div class="dsection">
+      <h3>💎 הכנסות משתנות נוספות</h3>
+      ${extraIncomes.length>0 ? `<span class="dcount">${fmt(totalExtraIncomeThisMonth())}/החודש</span>` : ''}
+    </div>
+    <div style="font-size:11.5px; color:var(--muted); margin:0 18px 10px; line-height:1.6;">
+      למעקב בלבד - לא משפיע על יעד הנסיעות היומי. כדי שהתחייבות תפסיק ללחוץ על יעד הנסיעות, סמן אותה כ"מכוסה מהכנסה נוספת" בעריכה שלה למטה.
+    </div>
+    <div class="listwrap" style="margin-top:0;">
+      <div class="addcard" onclick="openExtraIncomeSheet()"><span>➕</span> הוספת הכנסה נוספת</div>
+      ${sortedExtraIncomes.map(item=>{
+        const st = extraIncomeStatusFor(item);
+        return `
+        <div class="dcard">
+          <div class="dcardtop">
+            <div class="davatar">💎</div>
+            <div class="dcardhead">
+              <div class="dname">${escHtml(item.name)}</div>
+              <div class="dsub">הערכה שמרנית: ${fmt(item.estimate)}${item.dueDay ? ` · בסביבות ${item.dueDay} לחודש` : ''}</div>
+            </div>
+          </div>
+          <div class="dchips">
+            ${st.status==='received' ? `<div class="dchip" style="background:var(--paid-dim); color:var(--paid);">✅ התקבל החודש: ${fmt(st.amount!=null?st.amount:item.estimate)}</div>` : ''}
+            ${st.status==='postponed' ? `<div class="dchip">⏸️ נדחה החודש - יגיע בחודש הבא</div>` : ''}
+            ${st.status==='pending' ? `<div class="dchip due">🕒 טרם סומן החודש</div>` : ''}
+          </div>
+          ${item.note ? `<div class="dnote"><span class="ic">📝</span><span>${escHtml(item.note)}</span></div>` : ''}
+          <div class="dactions">
+            <button class="fuelbtn" onclick="openExtraIncomeReceivedSheet('${item.id}')">✔️ התקבל</button>
+            ${st.status!=='postponed' ? `<button class="fuelbtn" onclick="markExtraIncomePostponed('${item.id}')">⏸️ נדחה</button>` : `<button class="fuelbtn" onclick="markExtraIncomePending('${item.id}')">↩️ איפוס</button>`}
+            <button class="fuelbtn" onclick="openExtraIncomeSheet('${item.id}')">✏️</button>
+            <button class="fuelbtn" onclick="deleteExtraIncome('${item.id}')">🗑️</button>
+          </div>
+        </div>
+      `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderDebtChart(){
+  const sortedPayments = [...debtPayments].sort((a,b)=>a.ts-b.ts);
+  if(sortedPayments.length < 2) return '';
+  let cum = 0;
+  const points = sortedPayments.map(p=>{ cum += p.amount; return { ts:p.ts, cum }; });
+  const maxCum = points[points.length-1].cum || 1;
+  const minTs = points[0].ts, maxTs = points[points.length-1].ts || minTs+1;
+  const W = 300, H = 90, pad = 8;
+  const coords = points.map(p=>{
+    const x = pad + (maxTs>minTs ? ((p.ts-minTs)/(maxTs-minTs)) : 0) * (W-2*pad);
+    const y = H-pad - (p.cum/maxCum) * (H-2*pad);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+  return `
+    <div class="goalcard" style="padding:14px 16px;">
+      <div class="goallabel" style="margin-bottom:8px;">התקדמות תשלומים לאורך זמן</div>
+      <svg viewBox="0 0 ${W} ${H}" style="width:100%; height:80px; display:block;">
+        <polyline points="${coords}" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:4px; font-family:'Roboto Mono',monospace;">
+        <span>${new Date(minTs).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'})}</span>
+        <span>סה"כ שולם: ${fmt(maxCum)}</span>
+        <span>${new Date(maxTs).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'})}</span>
+      </div>
+    </div>
+  `;
+}
+
+function openDebtSheet(id){
+  debtEditTargetId = id || null;
+  const d = id ? debts.find(x=>x.id===id) : null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>💳 ${d ? 'עריכת בעל חוב' : 'הוספת בעל חוב'}</h2>
+    <input id="debtName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם בעל החוב" value="${d ? escHtml(d.creditorName) : ''}">
+    <input id="debtTotal" class="goalinput" type="number" inputmode="decimal" placeholder="סכום החוב הכולל" value="${d ? d.totalOwed : ''}">
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:2px 0 10px;">מה סיכמת מול בעל החוב? (לא חובה - רק אם כבר יש הסדר)</div>
+    <input id="debtMonthly" class="contactinput" style="width:100%; margin-bottom:10px;" type="number" inputmode="decimal" placeholder="תשלום חודשי מוסכם (לא חובה)" value="${d && d.monthlyAgreed ? d.monthlyAgreed : ''}">
+    <div class="deadlinerow">
+      <input id="debtDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="באיזה יום בחודש? (למשל 5)" value="${d && d.dueDay ? d.dueDay : ''}">
+    </div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px; line-height:1.6;">אם ממלאים - נזכיר לך יום לפני ובאותו יום, וגם יופיע ישירות על הכרטיס</div>
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer; border:1px solid var(--accent-dim);">
+      <input id="debtCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${d && d.coveredByExtraIncome ? 'checked' : ''}>
+      <span>🏦 החוב הזה מכוסה מהכנסה נוספת (עמלה וכו') - <b>לא</b> ייכנס ליעד היומי מנסיעות</span>
+    </label>
+    <div class="fieldlabel">הערה (לא חובה - כדי שתדע למה קבעת ככה בלי לפתוח שוב)</div>
+    <textarea id="debtNote" class="noteinput" placeholder="למשל: סיכמנו שאני משלם ב-5 לחודש כי אז מגיע לי המשכורת">${d && d.note ? escHtml(d.note) : ''}</textarea>
+    <div class="saverow" style="margin-top:4px;">
+      <button class="savebtn single" onclick="submitDebt()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitDebt(){
+  const name = (document.getElementById('debtName').value || '').trim();
+  const total = parseFloat(document.getElementById('debtTotal').value || '0');
+  const monthlyVal = parseFloat(document.getElementById('debtMonthly').value || '0');
+  const monthlyAgreed = monthlyVal>0 ? monthlyVal : null;
+  const dueDayVal = parseInt(document.getElementById('debtDueDay').value || '0', 10);
+  const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
+  const coveredByExtraIncome = document.getElementById('debtCoveredByExtra').checked;
+  const note = (document.getElementById('debtNote').value || '').trim();
+  if(!name || !total || total<=0) return;
+  if(debtEditTargetId){
+    const d = debts.find(x=>x.id===debtEditTargetId);
+    if(d){ d.creditorName = name; d.totalOwed = total; d.monthlyAgreed = monthlyAgreed; d.dueDay = dueDay; d.note = note; d.coveredByExtraIncome = coveredByExtraIncome; }
+  } else {
+    debts.push({ id:'debt'+Date.now()+Math.random().toString(36).slice(2,7), creditorName:name, totalOwed:total, monthlyAgreed, dueDay, note, coveredByExtraIncome, createdTs:Date.now() });
+  }
+  saveDebts();
+  debtEditTargetId = null;
+  closeSheet();
+  render();
+  checkMonthlyDebtReminders();
+}
+function nextDueDateFor(dueDay, hour){
+  const now = new Date();
+  const today = now.getDate();
+  let year = now.getFullYear(), month = now.getMonth();
+  if(dueDay < today){
+    // this month's occurrence already passed - schedule for next month instead
+    month += 1;
+    if(month > 11){ month = 0; year += 1; }
+  }
+  return new Date(year, month, dueDay, hour==null?9:hour, 0, 0);
+}
+function daysUntilDate(dueDate){
+  const now = new Date(); now.setHours(0,0,0,0);
+  const d = new Date(dueDate); d.setHours(0,0,0,0);
+  return Math.round((d-now)/86400000);
+}
+function getUpcomingObligations(daysAhead){
+  const list = [];
+  debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && d.dueDay).forEach(d=>{
+    const dueDate = nextDueDateFor(d.dueDay);
+    const daysAway = daysUntilDate(dueDate);
+    if(daysAway<=daysAhead){
+      const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+      list.push({ type:'debt', id:d.id, name:d.creditorName, amount:d.monthlyAgreed, daysAway, coveredByExtraIncome:!!d.coveredByExtraIncome, prepared: !!(d.preparedMonths && d.preparedMonths[ym]), ym, icon:'🤝' });
+    }
+  });
+  recurringCharges.filter(r=>r.dueDay && r.installmentsLeft!==0).forEach(r=>{
+    const dueDate = nextDueDateFor(r.dueDay);
+    const daysAway = daysUntilDate(dueDate);
+    if(daysAway<=daysAhead){
+      const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+      list.push({ type:'recurring', id:r.id, name:r.name, amount:r.amount, daysAway, coveredByExtraIncome:!!r.coveredByExtraIncome, prepared: !!(r.preparedMonths && r.preparedMonths[ym]), ym, icon:'📌' });
+    }
+  });
+  list.sort((a,b)=>a.daysAway-b.daysAway);
+  return list;
+}
+function toggleObligationPrepared(type, id, ym){
+  const list = type==='debt' ? debts : recurringCharges;
+  const item = list.find(x=>x.id===id);
+  if(!item) return;
+  item.preparedMonths = item.preparedMonths || {};
+  item.preparedMonths[ym] = !item.preparedMonths[ym];
+  if(type==='debt') saveDebts(); else saveRecurring();
+  render();
+}
+function checkMonthlyDebtReminders(){
+  // one-time+ongoing cleanup: retire ALL old-format debt reminder tasks (previous versions had
+  // a bug where a due-day already passed this month kept generating a "you're late" task instead
+  // of rolling forward to next month's occurrence)
+  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('debtdue-') && !t.id.endsWith('-dayv3')));
+  debts.forEach(debt=>{
+    if(!debt.monthlyAgreed || !debt.dueDay) return;
+    if(debtRemaining(debt) <= 0) return;
+    const dueDate = nextDueDateFor(debt.dueDay);
+    const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+    const onDayId = `debtdue-${debt.id}-${ym}-dayv3`;
+    if(!tasks.find(t=>t.id===onDayId)){
+      tasks.push({ id:onDayId, title:`💰 תשלום ל${debt.creditorName} · ${fmt(debt.monthlyAgreed)} · יום ${debt.dueDay} לחודש`, deadline:dueDate.getTime(), done:false });
+    }
+  });
+  saveTasks();
+}
+function deleteDebt(id){
+  if(!confirm('למחוק את בעל החוב הזה? היסטוריית התשלומים שלו תימחק גם היא.')) return;
+  debts = debts.filter(x=>x.id!==id);
+  debtPayments = debtPayments.filter(p=>p.debtId!==id);
+  saveDebts();
+  saveDebtPayments();
+  render();
+}
+
+let recurringEditTargetId = null;
+function openRecurringSheet(id){
+  recurringEditTargetId = id || null;
+  const r = id ? recurringCharges.find(x=>x.id===id) : null;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>📌 ${r ? 'עריכת חיוב קבוע' : 'הוספת חיוב קבוע'}</h2>
+    <input id="recName" class="contactinput" style="width:100%; margin-bottom:10px;" type="text" placeholder="שם ההוצאה (למשל: ביטוח רכב, שכירות)" value="${r ? escHtml(r.name) : ''}">
+    <input id="recAmount" class="goalinput" type="number" inputmode="decimal" placeholder="סכום חודשי" value="${r ? r.amount : ''}">
+    <div style="font-size:11.5px; color:var(--muted); text-align:center; margin:2px 0 10px;">באיזה יום בחודש יורד החיוב? (לא חובה)</div>
+    <div class="deadlinerow">
+      <input id="recDueDay" class="contactinput" style="width:100%;" type="number" min="1" max="31" inputmode="numeric" placeholder="למשל 1" value="${r && r.dueDay ? r.dueDay : ''}">
+    </div>
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px; line-height:1.6;">אם ממלאים - נזכיר לך באותו יום (אלא אם מסמנים למטה שזה יורד אוטומטית)</div>
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer;">
+      <input id="recAutomatic" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${r && r.isAutomatic ? 'checked' : ''}>
+      <span>🔁 יורד אוטומטית מהחשבון/הכרטיס (רק מבטל תזכורת - עדיין נכנס ליעד היומי מנסיעות)</span>
+    </label>
+    <label style="display:flex; align-items:center; gap:8px; background:var(--surface2); padding:12px 14px; border-radius:12px; margin-bottom:14px; font-size:12.5px; cursor:pointer; border:1px solid var(--accent-dim);">
+      <input id="recCoveredByExtra" type="checkbox" style="width:18px; height:18px; accent-color:var(--accent);" ${r && r.coveredByExtraIncome ? 'checked' : ''}>
+      <span>🏦 מכוסה מהכנסה נוספת (עמלה וכו') - <b>לא</b> ייכנס ליעד היומי מנסיעות</span>
+    </label>
+    <div class="fieldlabel">מספר תשלומים שנותרו (רק אם זו עסקה עם סוף, כמו הלוואה)</div>
+    <input id="recInstallments" class="contactinput" style="width:100%; margin-bottom:4px;" type="number" min="0" inputmode="numeric" placeholder="השאירו ריק אם זה חיוב קבוע לצמיתות" value="${r && r.installmentsLeft!=null ? r.installmentsLeft : ''}">
+    <div style="font-size:10.5px; color:var(--muted); text-align:center; margin:4px 0 12px; line-height:1.6;">לאחר שתסמנו את התשלום האחרון כ'שולם' - החיוב יפסיק להיספר אוטומטית</div>
+    <div class="fieldlabel">הערה (לא חובה)</div>
+    <textarea id="recNote" class="noteinput" placeholder="למשל: ביטוח חובה + מקיף לרכב">${r && r.note ? escHtml(r.note) : ''}</textarea>
+    <div class="saverow" style="margin-top:4px;">
+      <button class="savebtn single" onclick="submitRecurring()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitRecurring(){
+  const name = (document.getElementById('recName').value || '').trim();
+  const amount = parseFloat(document.getElementById('recAmount').value || '0');
+  const dueDayVal = parseInt(document.getElementById('recDueDay').value || '0', 10);
+  const dueDay = (dueDayVal>=1 && dueDayVal<=31) ? dueDayVal : null;
+  const isAutomatic = document.getElementById('recAutomatic').checked;
+  const coveredByExtraIncome = document.getElementById('recCoveredByExtra').checked;
+  const installmentsRaw = document.getElementById('recInstallments').value;
+  const installmentsLeft = (installmentsRaw!=='' && parseInt(installmentsRaw,10)>=0) ? parseInt(installmentsRaw,10) : null;
+  const note = (document.getElementById('recNote').value || '').trim();
+  if(!name || !amount || amount<=0) return;
+  if(recurringEditTargetId){
+    const r = recurringCharges.find(x=>x.id===recurringEditTargetId);
+    if(r){ r.name = name; r.amount = amount; r.dueDay = dueDay; r.note = note; r.installmentsLeft = installmentsLeft; r.isAutomatic = isAutomatic; r.coveredByExtraIncome = coveredByExtraIncome; }
+  } else {
+    recurringCharges.push({ id:'rec'+Date.now()+Math.random().toString(36).slice(2,7), name, amount, dueDay, note, installmentsLeft, isAutomatic, coveredByExtraIncome, createdTs:Date.now() });
+  }
+  saveRecurring();
+  recurringEditTargetId = null;
+  closeSheet();
+  render();
+  checkMonthlyRecurringReminders();
+}
+function deleteRecurring(id){
+  if(!confirm('למחוק את החיוב הקבוע הזה?')) return;
+  recurringCharges = recurringCharges.filter(x=>x.id!==id);
+  saveRecurring();
+  render();
+}
+function checkMonthlyRecurringReminders(){
+  // retire old-format reminders that don't roll forward correctly, same fix as debts had
+  tasks = tasks.filter(t => !(typeof t.id==='string' && t.id.startsWith('recdue-') && !t.id.endsWith('-dayv3')));
+  recurringCharges.forEach(r=>{
+    if(!r.dueDay || r.installmentsLeft===0) return;
+    const dueDate = nextDueDateFor(r.dueDay);
+    const ym = `${dueDate.getFullYear()}-${dueDate.getMonth()+1}`;
+    const onDayId = `recdue-${r.id}-${ym}-dayv3`;
+    if(!tasks.find(t=>t.id===onDayId)){
+      tasks.push({ id:onDayId, title:`📌 ${r.isAutomatic ? 'צפוי לרדת אוטומטית: ' : 'תשלום: '}${r.name} · ${fmt(r.amount)} · יום ${r.dueDay} לחודש`, deadline:dueDate.getTime(), done:false });
+    }
+  });
+  saveTasks();
+}
+function openPaymentSheet(debtId){
+  debtEditTargetId = debtId;
+  const d = debts.find(x=>x.id===debtId);
+  if(!d) return;
+  document.getElementById('overlay').classList.add('open');
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = `
+    <h2>💰 רישום תשלום ל${d.creditorName}</h2>
+    <div style="font-size:12px; color:var(--muted); text-align:center; margin-bottom:10px;">נותר לשלם: ${fmt(debtRemaining(d))}</div>
+    <input id="paymentAmount" class="goalinput" type="number" inputmode="decimal" placeholder="סכום ששולם" value="${d.monthlyAgreed || ''}">
+    <div class="saverow">
+      <button class="savebtn single" onclick="submitPayment()">💾 שמירה</button>
+    </div>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+function submitPayment(){
+  const amount = parseFloat(document.getElementById('paymentAmount').value || '0');
+  if(!amount || amount<=0) return;
+  const d = debts.find(x=>x.id===debtEditTargetId);
+  const wasRemaining = d ? debtRemaining(d) : 0;
+  debtPayments.push({ id:'pmt'+Date.now()+Math.random().toString(36).slice(2,7), debtId:debtEditTargetId, amount, ts:Date.now() });
+  saveDebtPayments();
+  debtEditTargetId = null;
+  closeSheet();
+  render();
+  if(d && wasRemaining>0 && debtRemaining(d)<=0){
+    celebrateConfetti();
+  }
+}
+
+function render(){
+  if(currentScreen === 'debts'){ renderDebtsScreen(); return; }
+  if(currentScreen === 'ai'){ renderAIScreen(); return; }
+  if(currentScreen === 'reminders'){ renderRemindersScreen(); return; }
+  const list = filtered();
+  const netTotal = list.reduce((s,e)=> s + netOf(e), 0);
+  const outstanding = list.filter(e=>!isExpenseKind(e.kind) && e.status==='unpaid')
+                           .reduce((s,e)=> s + netOf(e), 0);
+  const pendingCharges = list.filter(e=>e.status==='cancelled' && e.commissionPct>0 && e.chargeStatus==='pending');
+  const pendingChargeSum = pendingCharges.reduce((s,e)=> s + e.amount*0.12, 0);
+
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <header>
+      <h1>המונה שלי</h1>
+      <div class="date mono">${new Date().toLocaleDateString('he-IL',{weekday:'long', day:'numeric', month:'long'})}</div>
+    </header>
+
+    ${viewingWorkdayId ? (()=>{
+      const wd = workdayHistory.find(w=>w.id===viewingWorkdayId);
+      const rangeStr = wd ? (new Date(wd.start).toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'}) + ' · ' + new Date(wd.start).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'}) + '–' + new Date(wd.end).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})) : '';
+      return `<div class="workdaybar viewing">
+        <span>📅 צופה ביום: ${rangeStr}</span>
+        <button class="wdbtn" onclick="exitWorkdayView()">↩️ חזרה להיום</button>
+      </div>`;
+    })() : `<div class="workdaybar">
+      <span onclick="openWorkdayStartEdit()" style="cursor:pointer; text-decoration:underline dotted;">✏️ יום עבודה החל ${new Date(workdayStart).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})}</span>
+      <div style="display:flex; gap:6px;">
+        <button class="wdbtn" onclick="openWorkdayHistory()">📅 ימים קודמים</button>
+        <button class="wdbtn end" onclick="endWorkday()">🌙 סיום יום</button>
+      </div>
+    </div>`}
+
+    ${renderTasksSummaryBadge()}
+    <button class="taskbtn" onclick="openTaskModal()"><span>⏰</span><span>הוספת תזכורת עם שעה</span></button>
+    ${(typeof Notification!=='undefined' && Notification.permission==='default' && tasks.some(t=>!t.done)) ? `
+    <button class="taskbtn" onclick="requestNotifyPermission()" style="border-color:var(--accent); color:var(--accent);"><span>🔔</span><span>הפעלת התראות לתזכורות</span></button>
+    ` : ''}
+    ${renderVoiceSection()}
+
+    <div class="meter">
+      <div class="label">${period!=='today' ? (period==='week'?'רווח נטו · השבוע':period==='month'?'רווח נטו · החודש':'רווח נטו · הכל') : (viewingWorkdayId ? 'רווח נטו · יום נבחר' : 'רווח נטו · יום עבודה נוכחי')}</div>
+      <div class="amount"><span>₪</span>${netTotal.toLocaleString('he-IL',{minimumFractionDigits:0, maximumFractionDigits:0})}</div>
+      <div class="sub">
+        <span>נסיעות: <b>${list.filter(e=>!isExpenseKind(e.kind)).length}</b></span>
+        <span>דלק: <b>${fmt(list.filter(e=>e.kind==='fuel').reduce((s,e)=>s+e.amount,0))}</b></span>
+        <span>אוכל: <b>${fmt(list.filter(e=>e.kind==='food').reduce((s,e)=>s+e.amount,0))}</b></span>
+      </div>
+    </div>
+
+    ${period==='today' ? renderGoalCard(netTotal) : ''}
+    ${renderDebtEntryPoint()}
+    <div class="workdaybar" style="cursor:pointer;" onclick="openAIScreen()">
+      <span>🤖 שאל את המונה שלי</span>
+      <span class="wdbtn">שאלה</span>
+    </div>
+
+    <div class="outstanding ${outstanding>0?'':'hidden'}">
+      <span>💸 מגיע לך מלקוחות שטרם שילמו</span>
+      <b>${fmt(outstanding)}</b>
+    </div>
+
+    <div class="alertbar charge ${pendingCharges.length>0?'':'hidden'}">
+      <span>⚠️ ${pendingCharges.length} נסיעות בוטלו - לא בטוח שהניכוי בוטל</span>
+      <b>עד ${fmt(pendingChargeSum)}</b>
+    </div>
+
+    <div class="actions">
+      <button class="actbtn passenger" onclick="openDraft('passenger')">
+        <span class="ic">🚕</span> נסיעה
+      </button>
+      <button class="actbtn delivery" onclick="openDraft('delivery')">
+        <span class="ic">📦</span> משלוח
+      </button>
+      ${isOwnerAccount() ? `
+      <button class="actbtn install" onclick="openDraft('install')">
+        <span class="ic">🔧</span> התקנה
+      </button>` : ''}
+    </div>
+    <div class="expenserow">
+      <button class="fuelbtn" onclick="openDraft('fuel')"><span>⛽</span><span>דלק</span></button>
+      <button class="fuelbtn" onclick="openDraft('food')"><span>🍔</span><span>אוכל</span></button>
+    </div>
+
+    <div class="tabs">
+      ${['today','week','month','all'].map(p=>`
+        <div class="tab ${period===p?'active':''}" onclick="setPeriod('${p}')">
+          ${p==='today'?'היום':p==='week'?'השבוע':p==='month'?'החודש':'הכל'}
+        </div>`).join('')}
+    </div>
+
+    <div class="listwrap">
+      ${list.length===0 ? `
+        <div class="empty">
+          <span class="ic">🧾</span>
+          עדיין אין רשומות בטווח הזה.<br>תתחיל בלחיצה על נסיעה או משלוח למעלה.
+        </div>` : list.map(e=>`
+        <div class="entry">
+          <div class="ic">${CATS[e.kind].ic}</div>
+          <div class="mid">
+            <div class="ttl" style="${e.status==='cancelled'?'text-decoration:line-through; color:var(--muted);':''}">${CATS[e.kind].label}${e.urgency==='special' ? ' · ⚡ ספיישל' : ''}${e.urgency==='relaxed' ? ' · 🕊️ נחת' : ''}${!isExpenseKind(e.kind) && e.commissionPct>0 ? ' · '+e.commissionPct+'%' : ''}${e.status==='cancelled' ? ' · בוטלה' : ''}</div>
+            <div class="meta">
+              <span>${timeLabel(e.ts)}</span>
+            </div>
+            ${(e.name || e.phone) ? `
+            <div class="contactline">
+              ${e.name ? `<span>👤 ${e.name}</span>` : ''}
+              ${e.phone ? `<a href="tel:${e.phone.replace(/[^0-9+]/g,'')}">📞 ${e.phone}</a>` : ''}
+            </div>` : ''}
+          </div>
+          ${badgeFor(e)}
+          <div class="amt" onclick="openAmountEdit('${e.id}')" style="color:${isExpenseKind(e.kind)?'var(--unpaid)':(e.status==='cancelled' && !(e.commissionPct>0 && e.chargeStatus==='charged') ? 'var(--muted)':'var(--text)')}">${fmt(e.amount)}</div>
+          <div class="rowactions">
+            ${!isExpenseKind(e.kind) ? `<span class="editdebtor" onclick="openDebtorEdit('${e.id}')">✏️</span>` : ''}
+            <div class="del" onclick="removeEntry('${e.id}')">✕</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    ${entries.length>0 ? `<div class="resetlink" onclick="resetAllData()">🗑️ איפוס כל הנתונים</div>` : ''}
+    ${currentUid ? `
+      <div class="useremail">מחובר כ-${currentUserEmail}</div>
+      <div class="useremail" style="font-family:'Roboto Mono',monospace; font-size:10px; opacity:.7; margin-top:4px; user-select:all; cursor:text;" title="לחץ לבחירה והעתקה">UID: ${currentUid}</div>
+      <div class="logoutlink" onclick="signOutUser()">🚪 התנתקות</div>
+    ` : ''}
+
+    <button class="fab" id="fabRec"
+      onpointerdown="fabStart(event)" onpointerup="fabStop(event)"
+      onpointerleave="fabStop(event)" onpointercancel="fabStop(event)"
+      oncontextmenu="return false">🎙️</button>
+    <div class="rectoast" id="recToast"></div>
+  `;
+}
+
+function setPeriod(p){ period = p; viewingWorkdayId = null; render(); }
+
+// ---- Draft / modal (quick add) ----
+function openDraft(kind){
+  if(kind==='install' && !isOwnerAccount()) return;
+  draft = { kind, digits:'', commissionPct: (isExpenseKind(kind)||kind==='install') ? 0 : (lastCommissionPct[kind] ?? 0), contactOpen:false, forcedContact:false, name:'', phone:'', urgency:null, deadlineTime:'' };
+  renderSheet();
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSheet(){
+  document.getElementById('overlay').classList.remove('open');
+  draft = null;
+  editTargetId = null;
+  if(mediaRecorder && mediaRecorder.state !== 'inactive'){
+    try{ mediaRecorder.stop(); }catch(e){}
+  }
+  clearInterval(recordingTimerHandle);
+  previewBlob = null;
+}
+function pressKey(k){
+  if(!draft) return;
+  if(k==='back'){ draft.digits = draft.digits.slice(0,-1); }
+  else if(k==='.'){ if(!draft.digits.includes('.')) draft.digits += (draft.digits===''?'0.':'.'); }
+  else { if(draft.digits.length < 7) draft.digits += k; }
+  renderSheet();
+}
+function toggleContact(){
+  if(!draft) return;
+  draft.contactOpen = !draft.contactOpen;
+  renderSheet();
+}
+function setUrgency(val){
+  if(!draft) return;
+  draft.urgency = (draft.urgency===val) ? null : val;
+  if(draft.urgency==='relaxed' && !draft.deadlineTime){
+    const now = new Date();
+    now.setMinutes(now.getMinutes()+30);
+    draft.deadlineTime = String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
+  }
+  if(draft.urgency!=='relaxed') draft.deadlineTime = '';
+  renderSheet();
+}
+function setCommission(pct){
+  if(!draft) return;
+  draft.commissionPct = pct;
+  renderSheet();
+}
+function setCustomCommission(val){
+  if(!draft) return;
+  draft.commissionPct = val === '' ? 0 : Math.max(0, Math.min(100, parseFloat(val)||0));
+  document.querySelectorAll('.qchip').forEach(el=>el.classList.remove('on'));
+}
+function commitDraft(status){
+  if(!draft) return;
+  const amount = parseFloat(draft.digits || '0');
+  if(!amount || amount<=0){ return; }
+
+  if(status==='unpaid' && !isExpenseKind(draft.kind) && !draft.forcedContact){
+    draft.forcedContact = true;
+    draft.contactOpen = true;
+    renderSheet();
+    return;
+  }
+
+  if(!isExpenseKind(draft.kind)) lastCommissionPct[draft.kind] = draft.commissionPct;
+  addEntry({
+    id: 'e'+Date.now()+Math.random().toString(36).slice(2,7),
+    kind: draft.kind,
+    amount,
+    commissionPct: isExpenseKind(draft.kind) ? 0 : (draft.commissionPct||0),
+    status: isExpenseKind(draft.kind) ? 'paid' : status,
+    chargeStatus: status==='cancelled' ? 'pending' : null,
+    name: isExpenseKind(draft.kind) ? '' : (draft.name || '').trim(),
+    phone: isExpenseKind(draft.kind) ? '' : (draft.phone || '').trim(),
+    urgency: isExpenseKind(draft.kind) ? null : draft.urgency,
+    ts: currentTs()
+  });
+
+  if(!isExpenseKind(draft.kind) && draft.urgency==='relaxed' && draft.deadlineTime){
+    const [h,m] = draft.deadlineTime.split(':').map(Number);
+    const d = new Date();
+    d.setHours(h, m, 0, 0);
+    const nameTag = (draft.name || '').trim();
+    tasks.push({
+      id: 'task'+Date.now()+Math.random().toString(36).slice(2,7),
+      title: `${CATS[draft.kind].label}${nameTag ? ' - '+nameTag : ''} · ₪${amount}`,
+      deadline: d.getTime(),
+      done:false
+    });
+    saveTasks();
+  }
+
+  closeSheet();
+}
+
+function renderSheet(){
+  if(!draft) return;
+  const cat = CATS[draft.kind];
+  const amountVal = draft.digits || '0';
+  const sheet = document.getElementById('sheet');
+
+  if(draft.forcedContact){
+    sheet.innerHTML = `
+      <h2>👤 למי מחכים לתשלום?</h2>
+      <div class="display"><div class="val mono">₪${amountVal}</div></div>
+      <input id="draftName" class="contactinput" style="width:100%; margin-bottom:8px;" type="text" placeholder="שם הלקוח (לא חובה)" value="${draft.name||''}" oninput="draft.name=this.value">
+      <input id="draftPhone" class="contactinput" style="width:100%; margin-bottom:8px;" type="tel" placeholder="טלפון (לא חובה)" value="${draft.phone||''}" oninput="draft.phone=this.value">
+      <div class="expenserow" style="margin:0;">
+          <div class="contacttoggle" style="flex:1;" onclick="pickContactInto('draftName','draftPhone')">📇 אנשי קשר</div>
+          <div class="contacttoggle" style="flex:1;" onclick="openWhatsAppApp()">📱 WhatsApp</div>
+        </div>
+      <div class="saverow">
+        <button class="savebtn single" onclick="commitDraft('unpaid')">💾 שמירה</button>
+      </div>
+      <div class="cancel" onclick="draft.name='';draft.phone='';commitDraft('unpaid')">דלג בלי פרטים</div>
+    `;
+    return;
+  }
+
+  sheet.innerHTML = `
+    <h2>${cat.ic} הוספת ${cat.label}</h2>
+    <div class="display"><div class="val mono">₪${amountVal}</div></div>
+    ${!isExpenseKind(draft.kind) ? `
+      ${draft.kind!=='install' ? `
+      <div class="commlabel">אחוז ניכוי מהנסיעה</div>
+      <div class="commquick">
+        <div class="qchip ${draft.commissionPct===0?'on':''}" onclick="setCommission(0)">אין ניכוי</div>
+        <div class="qchip ${draft.commissionPct===12?'on':''}" onclick="setCommission(12)">12%</div>
+        <input class="comminput" type="number" min="0" max="100" inputmode="decimal" placeholder="אחר %" value="${(draft.commissionPct!==0 && draft.commissionPct!==12) ? draft.commissionPct : ''}" oninput="setCustomCommission(this.value)">
+      </div>` : ''}
+      ${!draft.contactOpen ? `
+        <div class="contacttoggle" onclick="toggleContact()">➕ הוספת שם וטלפון של הלקוח (לגביה)</div>
+      ` : `
+        <div class="contactfields">
+          <input id="draftName" class="contactinput" type="text" placeholder="שם הלקוח" value="${draft.name||''}" oninput="draft.name=this.value">
+          <input id="draftPhone" class="contactinput" type="tel" placeholder="טלפון" value="${draft.phone||''}" oninput="draft.phone=this.value">
+        </div>
+        <div class="expenserow" style="margin:0;">
+          <div class="contacttoggle" style="flex:1;" onclick="pickContactInto('draftName','draftPhone')">📇 אנשי קשר</div>
+          <div class="contacttoggle" style="flex:1;" onclick="openWhatsAppApp()">📱 WhatsApp</div>
+        </div>
+      `}
+      <div class="commlabel" style="margin-top:14px;">סוג המשלוח / נסיעה</div>
+      <div class="commquick">
+        <div class="qchip ${draft.urgency==='special'?'on':''}" onclick="setUrgency('special')">⚡ ספיישל (מיידי)</div>
+        <div class="qchip ${draft.urgency==='relaxed'?'on':''}" onclick="setUrgency('relaxed')">🕊️ נחת (רגוע)</div>
+      </div>
+      ${draft.urgency==='relaxed' ? `
+        <div class="deadlinerow">
+          <input class="timepicker" type="time" value="${draft.deadlineTime||''}" oninput="draft.deadlineTime=this.value">
+          <button class="timeresetbtn" onclick="const n=new Date(); n.setMinutes(n.getMinutes()+30); draft.deadlineTime=String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0'); renderSheet();">🔄</button>
+        </div>
+        <div style="font-size:11px; color:var(--muted); margin:0 0 12px;">עד איזו שעה צריך למסור (לא חובה)</div>
+      ` : ''}` : ''}
+    <div class="keypad">
+      ${['1','2','3','4','5','6','7','8','9','.','0','back'].map(k=>`
+        <button class="key ${k==='back'?'fn':''}" onclick="pressKey('${k}')">${k==='back'?'⌫':k}</button>
+      `).join('')}
+    </div>
+    ${isExpenseKind(draft.kind) ? `
+      <div class="saverow">
+        <button class="savebtn single" onclick="commitDraft('paid')"><span>💾</span><span>שמירה</span></button>
+      </div>` : `
+      <div class="saverow">
+        <button class="savebtn paid" onclick="commitDraft('paid')">✓<br>שולם</button>
+        <button class="savebtn unpaid" onclick="commitDraft('unpaid')">⏳<br>טרם שולם</button>
+        <button class="savebtn cancelbtn" onclick="commitDraft('cancelled')">🚫<br>בוטלה</button>
+      </div>`}
+    <div class="cancel" onclick="closeSheet()">ביטול</div>
+  `;
+}
+
+setInterval(()=>{
+  if(firebaseReady && !currentUid) return; // not logged in, login screen is showing - don't touch it
+  const overlayOpen = document.getElementById('overlay').classList.contains('open');
+  const anyAudioPlaying = Array.from(document.querySelectorAll('audio')).some(a=>!a.paused);
+  if(!overlayOpen && !anyAudioPlaying && !fabRecording) render();
+}, 60000);
+
+setInterval(()=>{
+  if(firebaseReady && !currentUid) return;
+  checkTaskAlerts();
+}, 20000);
+</script>
+</body>
+</html>
