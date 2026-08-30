@@ -519,7 +519,7 @@ let debts = [];
 let debtPayments = [];
 let recurringCharges = [];
 let extraIncomes = [];
-let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'banksetup'
+let currentScreen = 'main'; // 'main' | 'debts' | 'ai' | 'reminders'
 let debtEditTargetId = null;
 let workDaysPattern = [true,true,true,true,true,true,false]; // index 0=Sunday .. 6=Saturday, Friday default on
 let workExceptions = []; // [{date:'YYYY-MM-DD', working:false}] overrides the weekly pattern for a specific date
@@ -1433,6 +1433,35 @@ function timeLabel(ts){
   return d.toLocaleDateString('he-IL',{day:'2-digit',month:'2-digit'}) + ' · ' + hh;
 }
 
+function openRemindersScreen(){
+  currentScreen = 'reminders';
+  render();
+}
+function renderRemindersScreen(){
+  const app = document.getElementById('app');
+  const open = tasks.filter(t=>!t.done);
+  app.innerHTML = `
+    <header>
+      <button class="wdbtn" onclick="backToMain()" style="margin-bottom:10px;">→ חזרה</button>
+      <h1>🔔 תזכורות</h1>
+      <div class="date mono"></div>
+    </header>
+    ${open.length>0 ? renderTasksSection() : `<div class="empty" style="padding:30px 20px;"><span class="ic">🎉</span>אין תזכורות פתוחות כרגע.</div>`}
+    <button class="taskbtn" onclick="openTaskModal()"><span>⏰</span><span>הוספת תזכורת עם שעה</span></button>
+    ${(typeof Notification!=='undefined' && Notification.permission==='default' && tasks.some(t=>!t.done)) ? `
+    <button class="taskbtn" onclick="requestNotifyPermission()" style="border-color:var(--accent); color:var(--accent);"><span>🔔</span><span>הפעלת התראות לתזכורות</span></button>
+    ` : ''}
+  `;
+}
+function renderTasksSummaryBadge(){
+  const open = tasks.filter(t=>!t.done);
+  if(open.length===0) return '';
+  const overdueCount = open.filter(t=>t.deadline<=Date.now()).length;
+  return `<div class="workdaybar" style="cursor:pointer; box-shadow:0 0 16px rgba(244,180,0,.4); border-color:var(--accent);" onclick="openRemindersScreen()">
+    <span>🔔 ${open.length} תזכורות פתוחות${overdueCount>0 ? ` (${overdueCount} באיחור)` : ''}</span>
+    <span class="wdbtn">צפייה</span>
+  </div>`;
+}
 function renderTasksSection(){
   const open = tasks.filter(t=>!t.done).sort((a,b)=>a.deadline-b.deadline);
   if(open.length===0) return '';
@@ -1558,12 +1587,16 @@ function goalMessageFor(pct){
 }
 
 function renderGoalCard(netTotal){
-  if(dailyGoal === null || dailyGoal <= 0){
+  const dynamicTarget = computeDynamicDailyTarget();
+  const usingDynamic = dynamicTarget.hasObligations;
+  const effectiveGoal = usingDynamic ? dynamicTarget.perWorkDay : dailyGoal;
+
+  if(!usingDynamic && (dailyGoal === null || dailyGoal <= 0)){
     return `<div class="goalcard nogoal" onclick="openGoalEdit()">🎯 הגדר יעד יומי אישי (לא חובה)</div>`;
   }
-  const pct = Math.round((netTotal / dailyGoal) * 100);
+  const pct = effectiveGoal>0 ? Math.round((netTotal / effectiveGoal) * 100) : 0;
   const barPct = Math.max(0, Math.min(100, pct));
-  const reached = netTotal >= dailyGoal;
+  const reached = netTotal >= effectiveGoal;
   const dayKey = viewingWorkdayId || workdayStart;
 
   if(reached && goalConfettiShownFor !== dayKey && typeof confetti === 'function'){
@@ -1575,8 +1608,8 @@ function renderGoalCard(netTotal){
 
   return `<div class="goalcard">
     <div class="goalhead">
-      <div class="goallabel">יעד יומי</div>
-      <div class="goalnums" onclick="openGoalEdit()">₪${netTotal.toLocaleString('he-IL',{maximumFractionDigits:0})} <b>/ ₪${dailyGoal.toLocaleString('he-IL',{maximumFractionDigits:0})}</b> ✏️</div>
+      <div class="goallabel">יעד יומי${usingDynamic ? ' <span style="opacity:.6; font-weight:400;">(מסונכרן עם עמוד החובות)</span>' : ''}</div>
+      <div class="goalnums" ${usingDynamic ? 'onclick="openDebtsScreen()"' : 'onclick="openGoalEdit()"'}>₪${netTotal.toLocaleString('he-IL',{maximumFractionDigits:0})} <b>/ ₪${effectiveGoal.toLocaleString('he-IL',{maximumFractionDigits:0})}</b> ${usingDynamic ? '💳' : '✏️'}</div>
     </div>
     <div class="goalbar"><div class="goalbarfill ${reached?'done':''}" style="width:${barPct}%"></div></div>
     <div class="goalmsg ${reached?'done':''}">${goalMessageFor(pct)}</div>
@@ -1653,6 +1686,18 @@ function countRemainingWorkDaysInMonth(){
     if(isWorkingOn(new Date(year, month, day))) count++;
   }
   return count;
+}
+function computeDynamicDailyTarget(){
+  // single source of truth for "how much do I still need to bring today" - used identically by
+  // both the main screen goal card and the debts screen, so the two numbers can never drift apart
+  const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && !d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
+  const recurringTotal = totalRecurringMonthly();
+  const combinedMonthlyTotal = monthlyDebtTarget + recurringTotal;
+  const earnedThisMonth = totalNetEarnedThisMonth();
+  const stillNeeded = Math.max(0, combinedMonthlyTotal - earnedThisMonth);
+  const remainingWorkDays = countRemainingWorkDaysInMonth();
+  const perWorkDay = remainingWorkDays>0 ? Math.ceil(stillNeeded/remainingWorkDays) : 0;
+  return { monthlyDebtTarget, recurringTotal, combinedMonthlyTotal, earnedThisMonth, stillNeeded, remainingWorkDays, perWorkDay, hasObligations: combinedMonthlyTotal>0 };
 }
 
 function openWorkDaysSettings(){
@@ -2047,18 +2092,19 @@ function renderDebtsScreen(){
   // Dynamic catch-up daily target: compares total fixed obligations for the month against what
   // you've actually earned so far this month. If a day falls short, the shortfall automatically
   // raises the required amount for the remaining days - no manual tracking needed.
-  const monthlyDebtTarget = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && !d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
-  const recurringTotal = totalRecurringMonthly();
-  const combinedMonthlyTotal = monthlyDebtTarget + recurringTotal;
-  const earnedThisMonth = totalNetEarnedThisMonth();
-  const stillNeeded = Math.max(0, combinedMonthlyTotal - earnedThisMonth);
+  const dynamicTarget = computeDynamicDailyTarget();
+  const monthlyDebtTarget = dynamicTarget.monthlyDebtTarget;
+  const recurringTotal = dynamicTarget.recurringTotal;
+  const combinedMonthlyTotal = dynamicTarget.combinedMonthlyTotal;
+  const earnedThisMonth = dynamicTarget.earnedThisMonth;
+  const stillNeeded = dynamicTarget.stillNeeded;
   const coveredDebtsTotal = debts.filter(d=>debtRemaining(d)>0 && d.monthlyAgreed && d.coveredByExtraIncome).reduce((s,d)=>s+d.monthlyAgreed, 0);
   const coveredRecurringTotal = recurringCharges.filter(r=>r.installmentsLeft!==0 && r.coveredByExtraIncome).reduce((s,r)=>s+r.amount, 0);
   const coveredTotal = coveredDebtsTotal + coveredRecurringTotal;
   const upcomingObligations = getUpcomingObligations(14);
   const hasConfirmedIncomeThisMonth = extraIncomes.some(i=>extraIncomeStatusFor(i).status==='received');
-  const remainingWorkDays = countRemainingWorkDaysInMonth();
-  const perWorkDay = remainingWorkDays>0 ? Math.ceil(stillNeeded/remainingWorkDays) : 0;
+  const remainingWorkDays = dynamicTarget.remainingWorkDays;
+  const perWorkDay = dynamicTarget.perWorkDay;
   const nearestCharge = findNearestUpcomingCharge();
   const todayDate = now.getDate();
 
@@ -2540,6 +2586,7 @@ function submitPayment(){
 function render(){
   if(currentScreen === 'debts'){ renderDebtsScreen(); return; }
   if(currentScreen === 'ai'){ renderAIScreen(); return; }
+  if(currentScreen === 'reminders'){ renderRemindersScreen(); return; }
   const list = filtered();
   const netTotal = list.reduce((s,e)=> s + netOf(e), 0);
   const outstanding = list.filter(e=>!isExpenseKind(e.kind) && e.status==='unpaid')
@@ -2569,7 +2616,7 @@ function render(){
       </div>
     </div>`}
 
-    ${renderTasksSection()}
+    ${renderTasksSummaryBadge()}
     <button class="taskbtn" onclick="openTaskModal()"><span>⏰</span><span>הוספת תזכורת עם שעה</span></button>
     ${(typeof Notification!=='undefined' && Notification.permission==='default' && tasks.some(t=>!t.done)) ? `
     <button class="taskbtn" onclick="requestNotifyPermission()" style="border-color:var(--accent); color:var(--accent);"><span>🔔</span><span>הפעלת התראות לתזכורות</span></button>
