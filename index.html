@@ -566,6 +566,14 @@ function startOfPeriod(p){
   return new Date(0);
 }
 
+function entrySortCompare(a,b){
+  // unpaid entries always float to the top of the list, regardless of date - once marked paid,
+  // it drops back into its normal chronological position
+  const aUnpaid = a.status==='unpaid' ? 1 : 0;
+  const bUnpaid = b.status==='unpaid' ? 1 : 0;
+  if(aUnpaid !== bUnpaid) return bUnpaid - aUnpaid;
+  return b.ts - a.ts;
+}
 function filtered(){
   if(period==='today'){
     let start, end;
@@ -577,10 +585,10 @@ function filtered(){
       start = workdayStart;
       end = Infinity;
     }
-    return entries.filter(e => e.ts >= start && e.ts < end).sort((a,b)=>b.ts-a.ts);
+    return entries.filter(e => e.ts >= start && e.ts < end).sort(entrySortCompare);
   }
   const start = startOfPeriod(period).getTime();
-  return entries.filter(e => e.ts >= start).sort((a,b)=>b.ts-a.ts);
+  return entries.filter(e => e.ts >= start).sort(entrySortCompare);
 }
 
 function currentTs(){
